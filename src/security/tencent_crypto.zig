@@ -229,13 +229,13 @@ test "pkcs7Pad on block boundary adds a full block" {
 }
 
 test "pkcs7Unpad strips valid 32-byte padding" {
-    var buf = [_]u8{ 'a', 'b', 'c' } ++ [_]u8{29} ** 29;
+    var buf = [_]u8{ 'a', 'b', 'c' } ++ @as([29]u8, @splat(29));
     const result = try pkcs7Unpad(&buf, WECHAT_PKCS7_BLOCK);
     try std.testing.expectEqualStrings("abc", result);
 }
 
 test "pkcs7Unpad rejects padding longer than configured maximum" {
-    var buf = [_]u8{0} ** 16 ++ [_]u8{17} ** 16;
+    var buf = @as([16]u8, @splat(0)) ++ @as([16]u8, @splat(17));
     try std.testing.expectError(error.InvalidPadding, pkcs7Unpad(&buf, 16));
 }
 
@@ -251,8 +251,8 @@ test "decodeEncodingAesKey decodes 43-char base64 key" {
 }
 
 test "aesCbcEncrypt decrypt roundtrip with WeChat padding" {
-    const key = [_]u8{0x2b} ** 32;
-    const iv = [_]u8{0x00} ** 16;
+    const key: [32]u8 = @splat(0x2b);
+    const iv: [16]u8 = @splat(0x00);
     const plaintext = "wechat secure callback payload";
 
     const ciphertext = try aesCbcEncrypt(
@@ -277,10 +277,10 @@ test "aesCbcEncrypt decrypt roundtrip with WeChat padding" {
 }
 
 test "aes256CbcDecryptInPlace rejects non-block-aligned ciphertext" {
-    var buf = [_]u8{0} ** 15;
+    var buf: [15]u8 = @splat(0);
     try std.testing.expectError(
         error.InvalidCiphertext,
-        aes256CbcDecryptInPlace(&buf, [_]u8{0} ** 32, [_]u8{0} ** 16),
+        aes256CbcDecryptInPlace(&buf, @as([32]u8, @splat(0)), @as([16]u8, @splat(0))),
     );
 }
 
@@ -325,7 +325,7 @@ test "tc3Sign matches official Tencent Cloud example" {
 }
 
 test "tc3Sign key too long returns error" {
-    const long_key = "x" ** 222;
+    const long_key = &@import("../util/repeat.zig").repeat("x", 222);
     try std.testing.expectError(
         error.KeyTooLong,
         tc3Sign(long_key, "2026-03-16", "hunyuan", "payload"),

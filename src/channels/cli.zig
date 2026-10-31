@@ -53,8 +53,8 @@ else
             raw.lflag.ECHO = false;
             raw.lflag.ISIG = false;
             raw.lflag.IEXTEN = false;
-            raw.cc[@intFromEnum(std.posix.V.MIN)] = 1;
-            raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
+            raw.cc[@backingInt(std.posix.V.MIN)] = 1;
+            raw.cc[@backingInt(std.posix.V.TIME)] = 0;
             return raw;
         }
 

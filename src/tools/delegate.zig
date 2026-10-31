@@ -697,9 +697,7 @@ test "delegate uses configured provider entry for key and base_url" {
 
 test "delegate fallback uses configured default provider through vtable path" {
     if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
-    const c = @cImport({
-        @cInclude("stdlib.h");
-    });
+    const c = @import("posix_env");
     const allocator = std.testing.allocator;
 
     test_complete_agent_prompt_override = testCompleteAgentPrompt;
@@ -731,7 +729,7 @@ test "delegate fallback uses configured default provider through vtable path" {
         test_expected_prompt = null;
     }
 
-    const env_name = try allocator.dupeZ(u8, "NULLCLAW_HOME");
+    const env_name = try allocator.dupeSentinel(u8, "NULLCLAW_HOME", 0);
     defer allocator.free(env_name);
     const previous_home = std_compat.process.getEnvVarOwned(allocator, "NULLCLAW_HOME") catch |err| switch (err) {
         error.EnvironmentVariableNotFound => null,
@@ -740,7 +738,7 @@ test "delegate fallback uses configured default provider through vtable path" {
     defer {
         if (previous_home) |value| {
             defer allocator.free(value);
-            const value_z = allocator.dupeZ(u8, value) catch unreachable;
+            const value_z = allocator.dupeSentinel(u8, value, 0) catch unreachable;
             defer allocator.free(value_z);
             _ = c.setenv(env_name.ptr, value_z.ptr, 1);
         } else {
@@ -756,7 +754,7 @@ test "delegate fallback uses configured default provider through vtable path" {
     defer allocator.free(nullclaw_home);
     try std_compat.fs.makeDirAbsolute(nullclaw_home);
 
-    const home_z = try allocator.dupeZ(u8, nullclaw_home);
+    const home_z = try allocator.dupeSentinel(u8, nullclaw_home, 0);
     defer allocator.free(home_z);
     try std.testing.expectEqual(@as(c_int, 0), c.setenv(env_name.ptr, home_z.ptr, 1));
 

@@ -546,7 +546,7 @@ fn verifyRs256Signature(cert_der: []const u8, signing_input: []const u8, signatu
             const sig = Certificate.rsa.PKCS1v1_5Signature.fromBytes(modulus_len, signature);
             Certificate.rsa.PKCS1v1_5Signature.verify(
                 modulus_len,
-                sig,
+                &sig,
                 signing_input,
                 key,
                 std.crypto.hash.sha2.Sha256,

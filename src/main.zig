@@ -7609,22 +7609,23 @@ test "buildMemoryExportJsonl can include internal entries when requested" {
     try std.testing.expect(std.mem.indexOf(u8, jsonl, "\"content\":\"Bootstrap prompt\"") != null);
 }
 
-fn memoryHygieneAllocationTest(allocator: std.mem.Allocator) !void {
-    var impl_ = yc.memory.InMemoryLruMemory.init(allocator, 100);
-    defer impl_.deinit();
-    const mem = impl_.memory();
-
-    try mem.store("exact-a", "duplicate fact", .conversation, "s-1");
-    try mem.store("exact-b", "duplicate fact", .conversation, "s-1");
-    try mem.store("near-a", "  Case   Folded Fact  ", .conversation, "s-1");
-    try mem.store("near-b", "case folded fact", .conversation, "s-1");
-
+fn memoryHygieneAllocationTest(allocator: std.mem.Allocator, mem: yc.memory.Memory) !void {
     const report = try buildMemoryHygieneDryRunReport(allocator, mem, .{ .limit = 10 });
     _ = report;
 }
 
 test "buildMemoryHygieneDryRunReport handles allocation failures without leaks" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, memoryHygieneAllocationTest, .{});
+    // Keep fixture setup outside the failing allocator so only the report's
+    // allocation paths are fault-injected.
+    var impl_ = yc.memory.InMemoryLruMemory.init(std.testing.allocator, 100);
+    defer impl_.deinit();
+    const mem = impl_.memory();
+    try mem.store("exact-a", "duplicate fact", .conversation, "s-1");
+    try mem.store("exact-b", "duplicate fact", .conversation, "s-1");
+    try mem.store("near-a", "  Case   Folded Fact  ", .conversation, "s-1");
+    try mem.store("near-b", "case folded fact", .conversation, "s-1");
+
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, memoryHygieneAllocationTest, .{mem});
 }
 
 test "buildMemoryHygieneDryRunReport counts exact and normalized duplicates without mutation" {

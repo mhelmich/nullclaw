@@ -1911,7 +1911,7 @@ test "sendTextChunked sends short message in single call" {
 
 test "text splitting at MAX_MESSAGE_LEN boundary" {
     const effective_max = MAX_MESSAGE_LEN - CONTINUATION_MARKER.len;
-    var it = root.splitMessage("a" ** 5000, effective_max);
+    var it = root.splitMessage(&@import("../util/repeat.zig").repeat("a", 5000), effective_max);
     const chunk1 = it.next().?;
     try std.testing.expect(chunk1.len <= effective_max);
     try std.testing.expect(it.next() != null);
@@ -1919,7 +1919,7 @@ test "text splitting at MAX_MESSAGE_LEN boundary" {
 
 test "buildOutgoingTextChunks keeps chunks within Max limit" {
     const allocator = std.testing.allocator;
-    const chunks = try buildOutgoingTextChunks(allocator, "a" ** 5000);
+    const chunks = try buildOutgoingTextChunks(allocator, &@import("../util/repeat.zig").repeat("a", 5000));
     defer {
         for (chunks) |chunk| chunk.deinit(allocator);
         allocator.free(chunks);
@@ -1933,7 +1933,7 @@ test "buildOutgoingTextChunks keeps chunks within Max limit" {
 
 test "buildDraftPreviewChunk caps preview length with continuation marker" {
     const allocator = std.testing.allocator;
-    const preview = try buildDraftPreviewChunk(allocator, "a" ** 5000);
+    const preview = try buildDraftPreviewChunk(allocator, &@import("../util/repeat.zig").repeat("a", 5000));
     defer preview.deinit(allocator);
 
     try std.testing.expect(preview.body.len <= MAX_MESSAGE_LEN);

@@ -204,7 +204,7 @@ pub const IMessageChannel = struct {
     fn queryMaxRowId(self: *IMessageChannel, allocator: std.mem.Allocator, db_path: []const u8) !i64 {
         _ = self;
         var db: ?*c.sqlite3 = null;
-        const db_path_z = try allocator.dupeZ(u8, db_path);
+        const db_path_z = try allocator.dupeSentinel(u8, db_path, 0);
         defer allocator.free(db_path_z);
 
         const open_flags: c_int = c.SQLITE_OPEN_READONLY | c.SQLITE_OPEN_NOMUTEX;
@@ -237,7 +237,7 @@ pub const IMessageChannel = struct {
         }
 
         var db: ?*c.sqlite3 = null;
-        const db_path_z = try allocator.dupeZ(u8, db_path);
+        const db_path_z = try allocator.dupeSentinel(u8, db_path, 0);
         defer allocator.free(db_path_z);
 
         const open_flags: c_int = c.SQLITE_OPEN_READONLY | c.SQLITE_OPEN_NOMUTEX;
@@ -573,7 +573,7 @@ fn createTestDb(allocator: std.mem.Allocator) ![]u8 {
     const path = try std_compat.fs.path.join(allocator, &.{ tmp_dir, filename });
 
     var db: ?*c.sqlite3 = null;
-    const path_z = try allocator.dupeZ(u8, path);
+    const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
 
     if (c.sqlite3_open_v2(path_z.ptr, &db, c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE, null) != c.SQLITE_OK) {
@@ -624,7 +624,7 @@ fn insertTestMessage(
     chat_guid: ?[]const u8,
 ) !void {
     var db: ?*c.sqlite3 = null;
-    const path_z = try allocator.dupeZ(u8, db_path);
+    const path_z = try allocator.dupeSentinel(u8, db_path, 0);
     defer allocator.free(path_z);
     if (c.sqlite3_open_v2(path_z.ptr, &db, c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE, null) != c.SQLITE_OK) {
         if (db) |d| _ = c.sqlite3_close(d);

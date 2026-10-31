@@ -212,7 +212,7 @@ test "PNG dimensions" {
         0x49, 0x48, 0x44, 0x52, // "IHDR"
         0x00, 0x00, 0x03, 0x20, // width: 800
         0x00, 0x00, 0x02, 0x58, // height: 600
-    } ++ [_]u8{0} ** 10;
+    } ++ @as([10]u8, @splat(0));
     const dims = extractDimensions(&bytes, "png");
     try std.testing.expect(dims != null);
     try std.testing.expectEqual(@as(u32, 800), dims.?[0]);
@@ -232,7 +232,7 @@ test "GIF dimensions" {
 }
 
 test "BMP dimensions" {
-    var bytes = [_]u8{0} ** 26;
+    var bytes: [26]u8 = @splat(0);
     bytes[0] = 'B';
     bytes[1] = 'M';
     bytes[18] = 0x00;
@@ -254,7 +254,7 @@ test "JPEG dimensions" {
         0xFF, 0xD8, // SOI
         0xFF, 0xE0, // APP0 marker
         0x00, 0x10, // APP0 length = 16
-    } ++ [_]u8{0} ** 14 ++ [_]u8{
+    } ++ @as([14]u8, @splat(0)) ++ [_]u8{
         0xFF, 0xC0, // SOF0 marker
         0x00, 0x11, // SOF0 length
         0x08, // precision
@@ -333,7 +333,7 @@ test "GIF dimensions insufficient bytes" {
 }
 
 test "BMP dimensions insufficient bytes" {
-    var bytes = [_]u8{0} ** 20;
+    var bytes: [20]u8 = @splat(0);
     bytes[0] = 'B';
     bytes[1] = 'M';
     try std.testing.expect(extractDimensions(&bytes, "bmp") == null);
@@ -341,7 +341,7 @@ test "BMP dimensions insufficient bytes" {
 
 test "BMP negative height" {
     // BMP with negative height (top-down bitmap)
-    var bytes = [_]u8{0} ** 26;
+    var bytes: [26]u8 = @splat(0);
     bytes[0] = 'B';
     bytes[1] = 'M';
     bytes[18] = 0x20; // width: 32 (LE)

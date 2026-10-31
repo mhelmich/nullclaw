@@ -850,7 +850,7 @@ fn coerceIntegerStringListFields(
     if (value.* != .object) return false;
 
     var changed = false;
-    inline for (std.meta.fields(T)) |field| {
+    inline for (@import("meta_compat.zig").fields(T)) |field| {
         if (comptime isStringList(field.type)) {
             if (value.object.getPtr(field.name)) |field_value| {
                 changed = (try coerceIntegerArrayItemsToStrings(allocator, field_value)) or changed;
@@ -1054,7 +1054,7 @@ fn parseChannels(self: *Config, channels_value: std.json.Value) !void {
         if (v == .bool) self.channels.cli = v.bool;
     }
 
-    inline for (std.meta.fields(types.ChannelsConfig)) |field| {
+    inline for (@import("meta_compat.zig").fields(types.ChannelsConfig)) |field| {
         if (comptime std.mem.eql(u8, field.name, "cli")) continue;
         if (comptime std.mem.eql(u8, field.name, "external")) {
             if (channels_obj.get(field.name)) |channel_value| {

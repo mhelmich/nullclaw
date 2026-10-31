@@ -815,7 +815,7 @@ test "irc split trailing newline" {
 
 test "irc split multiline with long line" {
     const allocator = std.testing.allocator;
-    const long = "a" ** 800;
+    const long = &@import("../util/repeat.zig").repeat("a", 800);
     const msg = "short\n" ++ long ++ "\nend";
     const chunks = try splitIrcMessage(allocator, msg, 400);
     defer allocator.free(chunks);
@@ -876,7 +876,7 @@ test "irc sender prefix reserve constant" {
 
 test "irc split long exact boundary" {
     const allocator = std.testing.allocator;
-    const msg = "a" ** 400;
+    const msg = &@import("../util/repeat.zig").repeat("a", 400);
     const chunks = try splitIrcMessage(allocator, msg, 400);
     defer allocator.free(chunks);
     try std.testing.expectEqual(@as(usize, 1), chunks.len);
@@ -884,7 +884,7 @@ test "irc split long exact boundary" {
 
 test "irc split long message" {
     const allocator = std.testing.allocator;
-    const msg = "a" ** 800;
+    const msg = &@import("../util/repeat.zig").repeat("a", 800);
     const chunks = try splitIrcMessage(allocator, msg, 400);
     defer allocator.free(chunks);
     try std.testing.expectEqual(@as(usize, 2), chunks.len);

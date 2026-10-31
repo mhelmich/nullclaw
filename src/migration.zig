@@ -732,13 +732,13 @@ test "contentEqual: different lengths" {
 }
 
 test "contentEqual: identical long strings use hash path" {
-    const long = "x" ** 128;
+    const long = &@import("util/repeat.zig").repeat("x", 128);
     try std.testing.expect(contentEqual(long, long));
 }
 
 test "contentEqual: different long strings" {
-    const a = "a" ** 128;
-    const b = "b" ** 128;
+    const a = &@import("util/repeat.zig").repeat("a", 128);
+    const b = &@import("util/repeat.zig").repeat("b", 128);
     try std.testing.expect(!contentEqual(a, b));
 }
 

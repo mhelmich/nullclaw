@@ -53,7 +53,7 @@ These codebase realities should drive every design decision:
    - `src/gateway.zig`, `src/security/`, `src/tools/`, `src/runtime.zig` carry high blast radius.
    - Defaults are secure-by-default (pairing, HTTPS-only, allowlists, AEAD encryption). Keep it that way.
 
-4. **Zig 0.16.0 API is the baseline — no newer features**
+4. **Zig 0.17.0 API is the baseline — no newer features**
    - HTTP client: `std.http.Client.fetch()` with `std.Io.Writer.Allocating` for response body capture.
    - Child processes: `std.process.Child.init(argv, allocator)`, `.Pipe` (capitalized).
    - stdout: `std.fs.File.stdout().writer(&buf)` → use `.interface` for `print`/`flush`.
@@ -216,13 +216,13 @@ Whenever a documentation or code change indicates that the required Zig
 toolchain version is changing (for example: `README.md`, `AGENTS.md`,
 `CLAUDE.md`, `docs/**/installation.md`, `docs/**/development.md`,
 `docs/**/termux.md`, `flake.nix`, `Dockerfile`, `.github/workflows/**`, or any
-`zig version` / "Zig 0.16.0" string in the repo), the per-distro install
+`zig version` / "Zig 0.17.0" string in the repo), the per-distro install
 guides must be updated in the same change so they keep matching the pinned
 version.
 
 Required steps:
 
-1. Identify the new pinned Zig version (e.g. `0.16.1`, `0.17.0`).
+1. Identify the new pinned Zig version (e.g. `0.17.1`, `0.18.0`).
 2. Visit `https://ziglang.org/download/` and locate the section for that exact
    version. Do not guess URLs — fetch them from the official download page so
    the filename, archive layout, and presence of the build are confirmed.
@@ -346,5 +346,5 @@ When working in fast iterative mode:
 - Validate assumptions with code search before implementing.
 - Prefer deterministic behavior over clever shortcuts.
 - Do not "ship and hope" on security-sensitive paths.
-- If uncertain about Zig 0.16 API, check `src/` for existing usage patterns before guessing.
+- If uncertain about Zig 0.17 API, check `src/` for existing usage patterns before guessing.
 - If uncertain about architecture, read the vtable interface definition before implementing.

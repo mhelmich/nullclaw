@@ -278,7 +278,7 @@ test "buildRerankPrompt correctly formats prompt with query and candidates" {
 
 test "buildRerankPrompt truncates long content at 200 chars" {
     const allocator = std.testing.allocator;
-    const long_content = "A" ** 300;
+    const long_content = &@import("../../util/repeat.zig").repeat("A", 300);
     const candidates = [_]RetrievalCandidate{
         makeCandidate('1', long_content, 0.9),
     };
@@ -287,16 +287,16 @@ test "buildRerankPrompt truncates long content at 200 chars" {
     defer allocator.free(prompt);
 
     // Should contain the truncated version (200 A's), not the full 300
-    const expected_snippet = "A" ** 200;
+    const expected_snippet = &@import("../../util/repeat.zig").repeat("A", 200);
     try std.testing.expect(std.mem.indexOf(u8, prompt, expected_snippet) != null);
     // And not 201 A's in a row
-    const too_long = "A" ** 201;
+    const too_long = &@import("../../util/repeat.zig").repeat("A", 201);
     try std.testing.expect(std.mem.indexOf(u8, prompt, too_long) == null);
 }
 
 test "buildRerankPrompt keeps UTF-8 intact when truncating" {
     const allocator = std.testing.allocator;
-    const prefix = "a" ** 199;
+    const prefix = &@import("../../util/repeat.zig").repeat("a", 199);
     const candidates = [_]RetrievalCandidate{
         makeCandidate('1', prefix ++ "\xd0\x99tail", 0.9),
     };

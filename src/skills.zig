@@ -1005,7 +1005,7 @@ fn buildWebSkillOriginUrl(allocator: std.mem.Allocator, source: []const u8) ![]u
     if (!std.ascii.eqlIgnoreCase(uri.scheme, "https")) return error.SkillSecurityAuditFailed;
 
     var host_buf: [std.Io.net.HostName.max_len]u8 = undefined;
-    const host = (try uri.getHost(&host_buf)).bytes;
+    const host = (try std.Io.net.HostName.fromUri(uri, &host_buf)).bytes;
     const host_fmt = if (std.mem.indexOfScalar(u8, host, ':') != null)
         try std.fmt.allocPrint(allocator, "[{s}]", .{host})
     else

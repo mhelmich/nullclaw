@@ -2,18 +2,21 @@
     .name = .nullclaw,
     .version = "2026.5.29",
     .fingerprint = 0xe73e13d1c95956c2,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .sqlite3 = .{
             .path = "vendor/sqlite3",
         },
         .websocket = .{
-            .url = "git+https://github.com/nullclaw/websocket#9151f70b27024a072ea04425b9e7609eb6b1386c",
-            .hash = "websocket-0.1.0-ZPISdfzRAwC17T0kY68upDzuwC2eBof_bgx_kIFIxxxx",
+            .path = "vendor/websocket",
         },
         .wasm3 = .{
             .url = "git+https://github.com/nullclaw/wasm3#8a29b0080f1f65dbbe8b8f8c4d8148480feff377",
             .hash = "wasm3-0.5.1-hrMdNS09BQAWSU0TI6mVS8KfW4hxexjFvyOQINgphwKu",
+        },
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c?ref=zig-0.17.x#cfac21f3199b2b02ce3fd7db652aa456421fe4ab",
+            .hash = "translate_c-2.0.2-Q_BUWvBNBwDnyehSiuAJmdFcMYHYGA-Jc3KiYdrV2Dqx",
         },
     },
     .paths = .{

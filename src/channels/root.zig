@@ -931,15 +931,15 @@ test "ChannelPolicy struct defaults" {
 }
 
 test "DmPolicy enum values" {
-    try std.testing.expect(@intFromEnum(DmPolicy.allow) != @intFromEnum(DmPolicy.deny));
-    try std.testing.expect(@intFromEnum(DmPolicy.deny) != @intFromEnum(DmPolicy.allowlist));
-    try std.testing.expect(@intFromEnum(DmPolicy.allow) != @intFromEnum(DmPolicy.allowlist));
+    try std.testing.expect(@backingInt(DmPolicy.allow) != @backingInt(DmPolicy.deny));
+    try std.testing.expect(@backingInt(DmPolicy.deny) != @backingInt(DmPolicy.allowlist));
+    try std.testing.expect(@backingInt(DmPolicy.allow) != @backingInt(DmPolicy.allowlist));
 }
 
 test "GroupPolicy enum values" {
-    try std.testing.expect(@intFromEnum(GroupPolicy.open) != @intFromEnum(GroupPolicy.mention_only));
-    try std.testing.expect(@intFromEnum(GroupPolicy.mention_only) != @intFromEnum(GroupPolicy.allowlist));
-    try std.testing.expect(@intFromEnum(GroupPolicy.open) != @intFromEnum(GroupPolicy.allowlist));
+    try std.testing.expect(@backingInt(GroupPolicy.open) != @backingInt(GroupPolicy.mention_only));
+    try std.testing.expect(@backingInt(GroupPolicy.mention_only) != @backingInt(GroupPolicy.allowlist));
+    try std.testing.expect(@backingInt(GroupPolicy.open) != @backingInt(GroupPolicy.allowlist));
 }
 
 test "Channel sendRich falls back to send for plain text payload" {

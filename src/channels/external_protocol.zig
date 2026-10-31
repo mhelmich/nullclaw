@@ -522,9 +522,9 @@ fn isMethodNotFoundError(err_value: std.json.Value) bool {
     if (err_value.object.get("message")) |message_value| {
         if (message_value == .string) {
             const message = message_value.string;
-            return std.ascii.indexOfIgnoreCase(message, "method not found") != null or
-                std.ascii.indexOfIgnoreCase(message, "not implemented") != null or
-                std.ascii.indexOfIgnoreCase(message, "unknown method") != null;
+            return std.ascii.findIgnoreCase(message, "method not found") != null or
+                std.ascii.findIgnoreCase(message, "not implemented") != null or
+                std.ascii.findIgnoreCase(message, "unknown method") != null;
         }
     }
     return false;

@@ -17,9 +17,7 @@ const Tool = root.Tool;
 const ToolResult = root.ToolResult;
 const JsonObjectMap = root.JsonObjectMap;
 
-pub const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+pub const c = @import("sqlite_c");
 
 const SQLITE_STATIC: c.sqlite3_destructor_type = null;
 const BUSY_TIMEOUT_MS: c_int = 1000;
@@ -110,7 +108,7 @@ pub const SqliteQueryTool = struct {
 
         // Layer 2: open DB read-only — engine refuses any write attempt
         var db: ?*c.sqlite3 = null;
-        const path_z = try allocator.dupeZ(u8, resolved);
+        const path_z = try allocator.dupeSentinel(u8, resolved, 0);
         defer allocator.free(path_z);
         const open_rc = c.sqlite3_open_v2(path_z.ptr, &db, c.SQLITE_OPEN_READONLY, null);
         if (open_rc != c.SQLITE_OK) {
@@ -123,7 +121,7 @@ pub const SqliteQueryTool = struct {
         _ = c.sqlite3_busy_timeout(db, BUSY_TIMEOUT_MS);
 
         // Prepare statement
-        const query_z = try allocator.dupeZ(u8, query);
+        const query_z = try allocator.dupeSentinel(u8, query, 0);
         defer allocator.free(query_z);
         var stmt: ?*c.sqlite3_stmt = null;
         const prep_rc = c.sqlite3_prepare_v2(db, query_z.ptr, -1, &stmt, null);
@@ -647,7 +645,7 @@ const TestDb = struct {
         var i: usize = 0;
         while (i < n) : (i += 1) {
             var buf: [128]u8 = undefined;
-            const sql = try std.fmt.bufPrintZ(&buf, "INSERT INTO big VALUES ({d}, 'row{d}');", .{ i, i });
+            const sql = try std.fmt.bufPrintSentinel(&buf, "INSERT INTO big VALUES ({d}, 'row{d}');", .{ i, i }, 0);
             if (c.sqlite3_exec(db, sql.ptr, null, null, null) != c.SQLITE_OK) return error.PopulateFailed;
         }
     }
@@ -1120,7 +1118,7 @@ test "sqlite_query: max_bytes cap rolls back oversized row" {
         defer std.testing.allocator.free(big);
         @memset(big, 'A');
         var sql_buf: [10_200]u8 = undefined;
-        const sql = try std.fmt.bufPrintZ(&sql_buf, "INSERT INTO w VALUES ('{s}');", .{big});
+        const sql = try std.fmt.bufPrintSentinel(&sql_buf, "INSERT INTO w VALUES ('{s}');", .{big}, 0);
         _ = c.sqlite3_exec(db, sql.ptr, null, null, null);
         _ = c.sqlite3_exec(db, "INSERT INTO w VALUES ('short');", null, null, null);
     }

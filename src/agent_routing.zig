@@ -1488,7 +1488,7 @@ test "normalizeId — sanitizes invalid characters" {
 
 test "normalizeId — truncates at 64 chars" {
     var buf: [64]u8 = undefined;
-    const long_input = "a" ** 100;
+    const long_input = &@import("util/repeat.zig").repeat("a", 100);
     const result = normalizeId(&buf, long_input);
     try std.testing.expectEqual(@as(usize, 64), result.len);
 }

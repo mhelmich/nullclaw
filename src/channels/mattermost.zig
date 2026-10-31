@@ -116,7 +116,7 @@ pub const DEDUP_RING_SIZE: usize = 1024;
 
 /// Fixed-size ring buffer for post-id deduplication in the websocket loop.
 pub const DedupRing = struct {
-    ring: [DEDUP_RING_SIZE]u64 = [_]u64{0} ** DEDUP_RING_SIZE,
+    ring: [DEDUP_RING_SIZE]u64 = @splat(0),
     idx: u32 = 0,
     count: u32 = 0,
 
@@ -568,7 +568,7 @@ pub const MattermostChannel = struct {
         if (!std.ascii.eqlIgnoreCase(uri.scheme, "https")) {
             return error.MattermostRequiresHttps;
         }
-        const host = (uri.getHost(host_buf) catch return error.InvalidBaseUrl).bytes;
+        const host = (std.Io.net.HostName.fromUri(uri, host_buf) catch return error.InvalidBaseUrl).bytes;
         const port = uri.port orelse 443;
         const raw_path = componentAsSlice(uri.path);
         var prefix = raw_path;
@@ -838,7 +838,7 @@ pub const MattermostChannel = struct {
 
         var mention_buf: [256]u8 = undefined;
         const mention = std.fmt.bufPrint(&mention_buf, "@{s}", .{username}) catch return false;
-        return std.ascii.indexOfIgnoreCase(text, mention) != null;
+        return std.ascii.findIgnoreCase(text, mention) != null;
     }
 
     fn stripOncharPrefix(self: *const MattermostChannel, text: []const u8) ?[]const u8 {

@@ -1183,7 +1183,7 @@ pub fn initRuntime(
                             break :blk std_compat.fs.path.joinZ(allocator, &.{ workspace_dir, "vectors.db" }) catch break :vec_plane;
                         }
                         if (std_compat.fs.path.isAbsolute(configured)) {
-                            break :blk allocator.dupeZ(u8, configured) catch break :vec_plane;
+                            break :blk allocator.dupeSentinel(u8, configured, 0) catch break :vec_plane;
                         }
                         break :blk std_compat.fs.path.joinZ(allocator, &.{ workspace_dir, configured }) catch break :vec_plane;
                     };

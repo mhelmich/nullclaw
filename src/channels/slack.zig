@@ -792,7 +792,7 @@ pub const SlackChannel = struct {
         const uri = std.Uri.parse(socket_url) catch return error.SlackApiError;
         if (!std.ascii.eqlIgnoreCase(uri.scheme, "wss")) return error.SlackApiError;
 
-        const host = (uri.getHost(host_buf) catch return error.SlackApiError).bytes;
+        const host = (std.Io.net.HostName.fromUri(uri, host_buf) catch return error.SlackApiError).bytes;
         const port = uri.port orelse 443;
         const raw_path = componentAsSlice(uri.path);
         const query = if (uri.query) |q| componentAsSlice(q) else "";

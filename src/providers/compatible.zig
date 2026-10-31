@@ -3160,7 +3160,7 @@ test "max_streaming_prompt_bytes set applies threshold" {
     const small_req = root.ChatRequest{ .messages = &small_msgs, .model = "m" };
     try std.testing.expect(OpenAiCompatibleProvider.estimateRequestTextBytes(small_req) < 65536);
 
-    const big_content = "x" ** 70000;
+    const big_content = &@import("../util/repeat.zig").repeat("x", 70000);
     const big_msgs = [_]root.ChatMessage{root.ChatMessage.user(big_content)};
     const big_req = root.ChatRequest{ .messages = &big_msgs, .model = "m" };
     try std.testing.expect(OpenAiCompatibleProvider.estimateRequestTextBytes(big_req) >= 65536);
@@ -3177,7 +3177,7 @@ test "DEFAULT_MAX_STREAMING_PROMPT_BYTES legacy value is 32 KiB" {
 test "shouldSkipStreaming: null limit never skips streaming" {
     // Even a payload larger than the old 32 KiB hardcoded limit must NOT skip
     // when max_streaming_prompt_bytes is null (the new default).
-    const big_content = "x" ** 70000; // 70 KiB > old 32 KiB limit
+    const big_content = &@import("../util/repeat.zig").repeat("x", 70000); // 70 KiB > old 32 KiB limit
     const msgs = [_]root.ChatMessage{root.ChatMessage.user(big_content)};
     const req = root.ChatRequest{ .messages = &msgs, .model = "m" };
     try std.testing.expect(!OpenAiCompatibleProvider.shouldSkipStreaming(null, req));
@@ -3192,14 +3192,14 @@ test "shouldSkipStreaming: below limit does not skip" {
 
 test "shouldSkipStreaming: at limit skips" {
     // Content of exactly `limit` bytes should trigger the fallback.
-    const content = "a" ** 100;
+    const content = &@import("../util/repeat.zig").repeat("a", 100);
     const msgs = [_]root.ChatMessage{root.ChatMessage.user(content)};
     const req = root.ChatRequest{ .messages = &msgs, .model = "m" };
     try std.testing.expect(OpenAiCompatibleProvider.shouldSkipStreaming(100, req));
 }
 
 test "shouldSkipStreaming: above limit skips" {
-    const content = "a" ** 101;
+    const content = &@import("../util/repeat.zig").repeat("a", 101);
     const msgs = [_]root.ChatMessage{root.ChatMessage.user(content)};
     const req = root.ChatRequest{ .messages = &msgs, .model = "m" };
     try std.testing.expect(OpenAiCompatibleProvider.shouldSkipStreaming(100, req));
@@ -3209,7 +3209,7 @@ test "shouldSkipStreaming: old 32KiB limit would have skipped typical session wi
     // Regression: with the old hardcoded 32 KiB threshold a session loaded with
     // 50 Vikunja tools (~46-48 KiB of text) always fell back to non-streaming.
     // The new default (null) must never skip it.
-    const content = "x" ** 48000; // representative of typical session text estimate
+    const content = &@import("../util/repeat.zig").repeat("x", 48000); // representative of typical session text estimate
     const msgs = [_]root.ChatMessage{root.ChatMessage.user(content)};
     const req = root.ChatRequest{ .messages = &msgs, .model = "m" };
 

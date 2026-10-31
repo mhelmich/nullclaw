@@ -416,7 +416,7 @@ fn isLoopbackBindHost(host: []const u8) bool {
 
     if (std_compat.net.Address.parseIp6(normalized, 0)) |ip6| {
         const bytes = ip6.in6.sa.addr;
-        return std.mem.eql(u8, bytes[0..15], &[_]u8{0} ** 15) and bytes[15] == 1;
+        return std.mem.eql(u8, bytes[0..15], &@as([15]u8, @splat(0))) and bytes[15] == 1;
     } else |_| {}
 
     return false;

@@ -6,7 +6,7 @@ This guide focuses on the fastest safe path to open a useful PR without guessing
 
 ## Before You Start
 
-- Use **Zig 0.16.0** exactly. Debian setup is documented in `docs/en/zig-installation.md`.
+- Use **Zig 0.17.0** exactly. Debian setup is documented in `docs/en/zig-installation.md`.
 - Read `AGENTS.md` for repository-wide engineering rules.
 - If you touch architecture-sensitive code, also read `CLAUDE.md` for project context and validation details.
 
@@ -19,7 +19,7 @@ zig version
 Expected output:
 
 ```text
-0.16.0
+0.17.0
 ```
 
 ## Local Setup

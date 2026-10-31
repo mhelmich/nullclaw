@@ -301,7 +301,7 @@ fn parse_endpoint_url(
     const uri = std.Uri.parse(endpoint) catch return error.DingTalkApiError;
     if (!std.ascii.eqlIgnoreCase(uri.scheme, "wss")) return error.DingTalkApiError;
 
-    const host = (uri.getHost(host_buf) catch return error.DingTalkApiError).bytes;
+    const host = (std.Io.net.HostName.fromUri(uri, host_buf) catch return error.DingTalkApiError).bytes;
     const port = uri.port orelse 443;
     const raw_path = component_as_slice(uri.path);
     const raw_query = if (uri.query) |q| component_as_slice(q) else "";

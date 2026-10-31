@@ -160,7 +160,7 @@ pub const DEDUP_RING_SIZE: usize = 1024;
 /// Ring buffer for message_id deduplication.
 /// Stores the last DEDUP_RING_SIZE message IDs in a circular buffer.
 pub const DedupRing = struct {
-    ring: [DEDUP_RING_SIZE]u64 = [_]u64{0} ** DEDUP_RING_SIZE,
+    ring: [DEDUP_RING_SIZE]u64 = @splat(0),
     idx: u32 = 0,
     count: u32 = 0,
 
@@ -622,7 +622,7 @@ fn parseWebSocketConnectParts(
     else
         return error.InvalidOneBotUrl;
 
-    const host = (uri.getHost(host_buf) catch return error.InvalidOneBotUrl).bytes;
+    const host = (std.Io.net.HostName.fromUri(uri, host_buf) catch return error.InvalidOneBotUrl).bytes;
     const port: u16 = uri.port orelse if (secure) 443 else 80;
     const raw_path = componentAsSlice(uri.path);
     const query = if (uri.query) |q| componentAsSlice(q) else "";
@@ -661,7 +661,7 @@ fn buildSendApiUrl(buf: []u8, ws_url: []const u8) ![]const u8 {
         return error.InvalidOneBotUrl;
 
     var host_storage: [std.Io.net.HostName.max_len]u8 = undefined;
-    const host = (uri.getHost(&host_storage) catch return error.InvalidOneBotUrl).bytes;
+    const host = (std.Io.net.HostName.fromUri(uri, &host_storage) catch return error.InvalidOneBotUrl).bytes;
     const port: u16 = uri.port orelse if (secure) 443 else 80;
 
     var w: std.Io.Writer = .fixed(buf);

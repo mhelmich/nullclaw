@@ -118,7 +118,7 @@ pub const MarkdownMemory = struct {
         return std.fmt.allocPrint(allocator, "{s}/memory/{d:0>4}-{d:0>2}-{d:0>2}.md", .{
             self.workspace_dir,
             day.year,
-            @intFromEnum(md.month),
+            @backingInt(md.month),
             md.day_index + 1,
         });
     }

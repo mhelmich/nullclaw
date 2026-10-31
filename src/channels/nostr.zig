@@ -153,7 +153,7 @@ pub const NostrChannel = struct {
         recipient_hex: []const u8,
         relays: []const []const u8,
     ) [MAX_GIFT_WRAP_ARGS]?[]const u8 {
-        var args: [MAX_GIFT_WRAP_ARGS]?[]const u8 = .{null} ** MAX_GIFT_WRAP_ARGS;
+        var args: [MAX_GIFT_WRAP_ARGS]?[]const u8 = @splat(null);
         args[0] = nak_path;
         args[1] = "gift";
         args[2] = "wrap";
@@ -177,7 +177,7 @@ pub const NostrChannel = struct {
         sec: []const u8,
         relays: []const []const u8,
     ) [MAX_PUBLISH_ARGS]?[]const u8 {
-        var args: [MAX_PUBLISH_ARGS]?[]const u8 = .{null} ** MAX_PUBLISH_ARGS;
+        var args: [MAX_PUBLISH_ARGS]?[]const u8 = @splat(null);
         args[0] = nak_path;
         args[1] = "event";
         args[2] = "--sec";
@@ -207,7 +207,7 @@ pub const NostrChannel = struct {
         nak_path: []const u8,
         relays: []const []const u8,
     ) [MAX_PUBLISH_ARGS]?[]const u8 {
-        var args: [MAX_PUBLISH_ARGS]?[]const u8 = .{null} ** MAX_PUBLISH_ARGS;
+        var args: [MAX_PUBLISH_ARGS]?[]const u8 = @splat(null);
         args[0] = nak_path;
         args[1] = "event";
         var i: usize = 2;
@@ -225,7 +225,7 @@ pub const NostrChannel = struct {
         config: config_types.NostrConfig,
         recipient_hex: []const u8,
     ) [MAX_INBOX_LOOKUP_ARGS]?[]const u8 {
-        var args: [MAX_INBOX_LOOKUP_ARGS]?[]const u8 = .{null} ** MAX_INBOX_LOOKUP_ARGS;
+        var args: [MAX_INBOX_LOOKUP_ARGS]?[]const u8 = @splat(null);
         args[0] = config.nak_path;
         args[1] = "req";
         args[2] = "-k";
@@ -249,7 +249,7 @@ pub const NostrChannel = struct {
         sec: []const u8,
         tag_bufs: *[MAX_RELAYS][MAX_RELAY_TAG_LEN]u8,
     ) [MAX_INBOX_CREATE_ARGS]?[]const u8 {
-        var args: [MAX_INBOX_CREATE_ARGS]?[]const u8 = .{null} ** MAX_INBOX_CREATE_ARGS;
+        var args: [MAX_INBOX_CREATE_ARGS]?[]const u8 = @splat(null);
         args[0] = config.nak_path;
         args[1] = "event";
         args[2] = "-k";
@@ -380,7 +380,7 @@ pub const NostrChannel = struct {
     /// Relay list = config.relays followed by config.dm_relays.
     /// --auth makes nak respond to NIP-42 AUTH challenges using the bot's own key.
     pub fn buildListenerArgs(config: config_types.NostrConfig, sec: []const u8, since: []const u8) [MAX_LISTENER_ARGS]?[]const u8 {
-        var args: [MAX_LISTENER_ARGS]?[]const u8 = .{null} ** MAX_LISTENER_ARGS;
+        var args: [MAX_LISTENER_ARGS]?[]const u8 = @splat(null);
         args[0] = config.nak_path;
         args[1] = "req";
         args[2] = "--stream";
@@ -1057,7 +1057,7 @@ test "NostrChannel deinit on fresh instance does not leak" {
 
 test "buildSendEventArgs constructs correct arguments" {
     var p_buf: [66]u8 = undefined;
-    const p_tag = NostrChannel.formatPTag("deadbeef" ** 8, &p_buf);
+    const p_tag = NostrChannel.formatPTag(&@import("../util/repeat.zig").repeat("deadbeef", 8), &p_buf);
     const args = NostrChannel.buildSendEventArgs("nak", "bunker://xyz", "hello", p_tag);
     try std.testing.expectEqualStrings("nak", args[0].?);
     try std.testing.expectEqualStrings("event", args[1].?);
@@ -1108,7 +1108,7 @@ test "buildGiftWrapArgs with no relays leaves relay slots null" {
 test "buildPublishArgs constructs correct arguments" {
     const config = config_types.NostrConfig{
         .private_key = "enc2:sec",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
         .relays = &.{ "wss://relay.damus.io", "wss://nos.lol" },
     };
     const args = NostrChannel.buildPublishArgs(config, "bunker://xyz");
@@ -1148,16 +1148,16 @@ test "buildPublishOnlyArgs constructs arguments without signing key" {
 test "buildInboxLookupArgs constructs correct arguments" {
     const config = config_types.NostrConfig{
         .private_key = "enc2:sec",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
         .relays = &.{"wss://relay.damus.io"},
     };
-    const args = NostrChannel.buildInboxLookupArgs(config, "b" ** 64);
+    const args = NostrChannel.buildInboxLookupArgs(config, &@import("../util/repeat.zig").repeat("b", 64));
     try std.testing.expectEqualStrings("nak", args[0].?);
     try std.testing.expectEqualStrings("req", args[1].?);
     try std.testing.expectEqualStrings("-k", args[2].?);
     try std.testing.expectEqualStrings("10050", args[3].?);
     try std.testing.expectEqualStrings("-a", args[4].?);
-    try std.testing.expectEqualStrings("b" ** 64, args[5].?);
+    try std.testing.expectEqualStrings(&@import("../util/repeat.zig").repeat("b", 64), args[5].?);
     try std.testing.expectEqualStrings("wss://relay.damus.io", args[6].?);
     try std.testing.expect(args[7] == null);
 }
@@ -1188,8 +1188,8 @@ test "parseRelayTags returns empty slice when no relay tags" {
 test "buildListenerArgs subscribes to kind:1059 and kind:4, on relays and dm_relays" {
     const config = config_types.NostrConfig{
         .private_key = "enc2:sec",
-        .owner_pubkey = "deadbeef" ** 8,
-        .bot_pubkey = "cafebabe" ** 8, // distinct from owner_pubkey
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("deadbeef", 8),
+        .bot_pubkey = &@import("../util/repeat.zig").repeat("cafebabe", 8), // distinct from owner_pubkey
         .relays = &.{"wss://relay.damus.io"},
         .dm_relays = &.{"wss://auth.nostr1.com"},
     };
@@ -1207,7 +1207,7 @@ test "buildListenerArgs subscribes to kind:1059 and kind:4, on relays and dm_rel
     try std.testing.expectEqualStrings("-s", args[10].?); // relay-side startup filter
     try std.testing.expectEqualStrings("1700000000", args[11].?);
     try std.testing.expectEqualStrings("-p", args[12].?);
-    try std.testing.expectEqualStrings("cafebabe" ** 8, args[13].?); // bot_pubkey, not owner
+    try std.testing.expectEqualStrings(&@import("../util/repeat.zig").repeat("cafebabe", 8), args[13].?); // bot_pubkey, not owner
     try std.testing.expectEqualStrings("wss://relay.damus.io", args[14].?);
     try std.testing.expectEqualStrings("wss://auth.nostr1.com", args[15].?);
     try std.testing.expect(args[16] == null);
@@ -1216,8 +1216,8 @@ test "buildListenerArgs subscribes to kind:1059 and kind:4, on relays and dm_rel
 test "buildListenerArgs deduplicates relays present in both lists" {
     const config = config_types.NostrConfig{
         .private_key = "enc2:sec",
-        .owner_pubkey = "deadbeef" ** 8,
-        .bot_pubkey = "cafebabe" ** 8,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("deadbeef", 8),
+        .bot_pubkey = &@import("../util/repeat.zig").repeat("cafebabe", 8),
         .relays = &.{ "wss://relay.damus.io", "wss://auth.nostr1.com" },
         .dm_relays = &.{"wss://auth.nostr1.com"}, // duplicate of relays entry
     };
@@ -1270,69 +1270,69 @@ test "parseUnwrappedRumor returns error on missing created_at" {
 }
 
 test "isValidHexKey: accepts 64 lowercase hex chars" {
-    try std.testing.expect(NostrChannel.isValidHexKey("a" ** 64));
-    try std.testing.expect(NostrChannel.isValidHexKey("0123456789abcdef" ** 4));
+    try std.testing.expect(NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("a", 64)));
+    try std.testing.expect(NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("0123456789abcdef", 4)));
 }
 
 test "isValidHexKey: rejects wrong length" {
-    try std.testing.expect(!NostrChannel.isValidHexKey("a" ** 63));
-    try std.testing.expect(!NostrChannel.isValidHexKey("a" ** 65));
+    try std.testing.expect(!NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("a", 63)));
+    try std.testing.expect(!NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("a", 65)));
     try std.testing.expect(!NostrChannel.isValidHexKey(""));
 }
 
 test "isValidHexKey: rejects uppercase hex" {
-    try std.testing.expect(!NostrChannel.isValidHexKey("A" ** 64));
-    try std.testing.expect(!NostrChannel.isValidHexKey("ABCDEF0123456789" ** 4));
+    try std.testing.expect(!NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("A", 64)));
+    try std.testing.expect(!NostrChannel.isValidHexKey(&@import("../util/repeat.zig").repeat("ABCDEF0123456789", 4)));
 }
 
 test "isValidHexKey: rejects npub prefix" {
     // npub1 is obviously not 64 hex chars, but also not hex
-    try std.testing.expect(!NostrChannel.isValidHexKey("npub1" ++ "a" ** 59));
+    try std.testing.expect(!NostrChannel.isValidHexKey("npub1" ++ &@import("../util/repeat.zig").repeat("a", 59)));
 }
 
 test "validateConfig: valid hex pubkey and enc2 key passes" {
     try NostrChannel.validateConfig(.{
         .private_key = "enc2:deadbeef",
-        .owner_pubkey = "a" ** 64,
-        .bot_pubkey = "b" ** 64,
-        .dm_allowed_pubkeys = &.{ "c" ** 64, "*" },
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
+        .bot_pubkey = &@import("../util/repeat.zig").repeat("b", 64),
+        .dm_allowed_pubkeys = &.{ &@import("../util/repeat.zig").repeat("c", 64), "*" },
     });
 }
 
 test "validateConfig: npub owner_pubkey returns error" {
     try std.testing.expectError(error.InvalidKeyFormat, NostrChannel.validateConfig(.{
         .private_key = "enc2:x",
-        .owner_pubkey = "npub1" ++ "a" ** 59,
+        .owner_pubkey = "npub1" ++ &@import("../util/repeat.zig").repeat("a", 59),
     }));
 }
 
 test "validateConfig: non-hex dm_allowed_pubkeys returns error" {
     try std.testing.expectError(error.InvalidKeyFormat, NostrChannel.validateConfig(.{
         .private_key = "enc2:x",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
         .dm_allowed_pubkeys = &.{"npub1abc"},
     }));
 }
 
 test "validateConfig: plaintext private_key returns error" {
     try std.testing.expectError(error.InvalidKeyFormat, NostrChannel.validateConfig(.{
-        .private_key = "a" ** 64,
-        .owner_pubkey = "b" ** 64,
+        .private_key = &@import("../util/repeat.zig").repeat("a", 64),
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("b", 64),
     }));
 }
 
 test "validateConfig: nsec private_key returns error" {
     try std.testing.expectError(error.InvalidKeyFormat, NostrChannel.validateConfig(.{
-        .private_key = "nsec1" ++ "a" ** 59,
-        .owner_pubkey = "b" ** 64,
+        .private_key = "nsec1" ++ &@import("../util/repeat.zig").repeat("a", 59),
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("b", 64),
     }));
 }
 
 test "validateConfig: bunker_uri skips private_key check" {
     try NostrChannel.validateConfig(.{
         .private_key = "not-encrypted",
-        .owner_pubkey = "a" ** 64,
-        .bot_pubkey = "b" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
+        .bot_pubkey = &@import("../util/repeat.zig").repeat("b", 64),
         .bunker_uri = "bunker://abc?relay=wss://relay.damus.io",
     });
 }
@@ -1340,7 +1340,7 @@ test "validateConfig: bunker_uri skips private_key check" {
 test "validateConfig: empty bot_pubkey returns error" {
     try std.testing.expectError(error.InvalidKeyFormat, NostrChannel.validateConfig(.{
         .private_key = "enc2:x",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
         .bot_pubkey = "", // not set — old config or missing onboarding step
     }));
 }
@@ -1463,7 +1463,7 @@ test "buildSessionKey formats correctly" {
 
 test "buildSessionKey truncates at 64 hex chars" {
     var buf: [71]u8 = undefined;
-    const long_hex = "a" ** 80;
+    const long_hex = &@import("../util/repeat.zig").repeat("a", 80);
     const key = NostrChannel.buildSessionKey(long_hex, &buf);
     try std.testing.expectEqual(@as(usize, 6 + 64), key.len);
     try std.testing.expect(std.mem.startsWith(u8, key, "nostr:"));
@@ -1527,7 +1527,7 @@ test "healthCheck returns true when started and running" {
 test "buildInboxCreateArgs constructs kind:10050 create args" {
     const config = config_types.NostrConfig{
         .private_key = "enc2:sec",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("../util/repeat.zig").repeat("a", 64),
         .dm_relays = &.{"wss://auth.nostr1.com"},
     };
     var tag_bufs: [NostrChannel.MAX_RELAYS][NostrChannel.MAX_RELAY_TAG_LEN]u8 = undefined;
@@ -1577,7 +1577,7 @@ test "buildEncryptArgs constructs correct arguments" {
 
 test "buildNip04EventArgs constructs correct arguments" {
     var p_buf: [66]u8 = undefined;
-    const p_tag = NostrChannel.formatPTag("deadbeef" ** 8, &p_buf);
+    const p_tag = NostrChannel.formatPTag(&@import("../util/repeat.zig").repeat("deadbeef", 8), &p_buf);
     const args = NostrChannel.buildNip04EventArgs("nak", "myhexkey", "ciphertext?iv=abc", p_tag);
     try std.testing.expectEqualStrings("nak", args[0].?);
     try std.testing.expectEqualStrings("event", args[1].?);

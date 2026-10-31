@@ -77,36 +77,46 @@ pub const Stream = struct {
     }
 
     pub fn close(self: Stream) void {
-        self.toInner().close(shared.io());
+        self.toInner().close(shared.networkIo());
     }
 
     pub fn reader(self: Stream, buffer: []u8) Reader {
-        return self.toInner().reader(shared.io(), buffer);
+        return self.toInner().reader(shared.networkIo(), buffer);
     }
 
     pub fn writer(self: Stream, buffer: []u8) Writer {
-        return self.toInner().writer(shared.io(), buffer);
+        return self.toInner().writer(shared.networkIo(), buffer);
     }
 
     pub fn read(self: Stream, buffer: []u8) ReadError!usize {
         if (buffer.len == 0) return 0;
 
-        const io = shared.io();
-        var data = [1][]u8{buffer};
-        return io.vtable.netRead(io.userdata, self.handle, &data) catch |err| switch (err) {
-            error.Canceled => return error.Canceled,
-            else => return err,
+        // Socket-pair tests need real local descriptor reads; std.testing.io has no socket backend.
+        if (builtin.is_test) return posix.read(self.handle, buffer) catch |err| switch (err) {
+            error.AccessDenied => error.AccessDenied,
+            error.WouldBlock => error.WouldBlock,
+            error.Canceled => error.Canceled,
+            error.ConnectionResetByPeer => error.ConnectionResetByPeer,
+            error.SocketUnconnected => error.SocketUnconnected,
+            error.SystemResources => error.SystemResources,
+            else => error.Unexpected,
         };
+
+        const io = shared.networkIo();
+        var data = [1][]u8{buffer};
+        const result = try io.operate(.{ .net_read = .{ .socket_handle = self.handle, .data = &data } });
+        const read_result = result.net_read catch |err| return err;
+        return read_result.data_len;
     }
 
     pub fn write(self: Stream, bytes: []const u8) WriteError!usize {
         if (bytes.len == 0) return 0;
 
-        const io = shared.io();
+        const io = shared.networkIo();
         var total: usize = 0;
         while (total < bytes.len) {
             var data = [1][]const u8{bytes[total..]};
-            const n = try io.vtable.netWrite(io.userdata, self.handle, "", &data, 1);
+            const n = try (try io.operate(.{ .net_write = .{ .socket_handle = self.handle, .data = &data } })).net_write;
             if (n == 0) return error.Unexpected;
             total += n;
         }
@@ -118,7 +128,7 @@ pub const Stream = struct {
     }
 
     pub fn shutdown(self: Stream, how: IoNet.ShutdownHow) IoNet.ShutdownError!void {
-        try self.toInner().shutdown(shared.io(), how);
+        try self.toInner().shutdown(shared.networkIo(), how);
     }
 };
 
@@ -221,7 +231,7 @@ pub const Address = extern union {
     }
 
     pub fn resolveIp(name: []const u8, port: u16) !Address {
-        return fromCurrent(try IoNet.IpAddress.resolve(shared.io(), name, port));
+        return fromCurrent(try IoNet.IpAddress.resolve(shared.networkIo(), name, port));
     }
 
     pub fn toCurrent(self: Address) IoNet.IpAddress {
@@ -251,12 +261,12 @@ pub const Address = extern union {
 
     pub fn listen(self: Address, options: ListenOptions) !Server {
         const current = self.toCurrent();
-        var server = try current.listen(shared.io(), .{
+        var server = try current.listen(shared.networkIo(), .{
             .reuse_address = options.reuse_address,
             .mode = .stream,
             .protocol = .tcp,
         });
-        errdefer server.deinit(shared.io());
+        errdefer server.deinit(shared.networkIo());
         try setSocketNonblocking(server.socket.handle, options.force_nonblocking);
 
         return .{
@@ -335,8 +345,8 @@ pub const Server = struct {
             },
             .options = accept_options,
         };
-        var stream = try server.accept(shared.io());
-        errdefer stream.close(shared.io());
+        var stream = try server.accept(shared.networkIo());
+        errdefer stream.close(shared.networkIo());
         try setSocketNonblocking(stream.socket.handle, false);
         return .{
             .stream = .{ .handle = stream.socket.handle },
@@ -380,11 +390,11 @@ pub const GetAddressListError = Allocator.Error || error{
 };
 
 pub fn tcpConnectToAddress(address: Address) !Stream {
-    var stream = try address.toCurrent().connect(shared.io(), .{
+    var stream = try address.toCurrent().connect(shared.networkIo(), .{
         .mode = .stream,
         .protocol = .tcp,
     });
-    errdefer stream.close(shared.io());
+    errdefer stream.close(shared.networkIo());
     try setSocketNonblocking(stream.socket.handle, false);
     return .{ .handle = stream.socket.handle };
 }
@@ -419,7 +429,7 @@ fn mapWindowsLookupError(err: anyerror) GetAddressListError {
 }
 
 fn getAddressListWindows(gpa: Allocator, name: []const u8, port: u16) GetAddressListError!*AddressList {
-    const io = shared.io();
+    const io = shared.networkIo();
     const host_name = IoNet.HostName.init(name) catch |err| switch (err) {
         error.NameTooLong => return error.NameTooLong,
         error.InvalidHostName => return error.UnknownHostName,
@@ -534,7 +544,7 @@ pub fn getAddressList(gpa: Allocator, name: []const u8, port: u16) GetAddressLis
     const name_c = name_buffer[0..name.len :0];
 
     var port_buffer: [8]u8 = undefined;
-    const port_c = std.fmt.bufPrintZ(&port_buffer, "{d}", .{port}) catch unreachable;
+    const port_c = std.fmt.bufPrintSentinel(&port_buffer, "{d}", .{port}, 0) catch unreachable;
 
     const hints: posix.addrinfo = .{
         .flags = .{ .CANONNAME = false, .NUMERICSERV = true },
@@ -548,7 +558,7 @@ pub fn getAddressList(gpa: Allocator, name: []const u8, port: u16) GetAddressLis
     };
     var res: ?*posix.addrinfo = null;
     switch (posix.system.getaddrinfo(name_c.ptr, port_c.ptr, &hints, &res)) {
-        @as(posix.system.EAI, @enumFromInt(0)) => {},
+        @as(posix.system.EAI, @fromBackingInt(@intCast(0))) => {},
         .ADDRFAMILY, .FAMILY => return error.AddressFamilyNotSupported,
         .AGAIN => return error.TemporaryNameServerFailure,
         .FAIL => return error.NameServerFailure,
@@ -624,7 +634,7 @@ test "compat net normalizes listener and stream blocking mode" {
 
     var conn = server.accept() catch |err| switch (err) {
         error.WouldBlock => blk: {
-            std.Io.sleep(shared.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
+            std.Io.sleep(shared.networkIo(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
             break :blk try server.accept();
         },
         else => return err,
@@ -661,7 +671,7 @@ test "compat net nonblocking listener accept4 accepted socket is blocking" {
 
     var conn = server.accept() catch |err| switch (err) {
         error.WouldBlock => blk: {
-            std.Io.sleep(shared.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
+            std.Io.sleep(shared.networkIo(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
             break :blk try server.accept();
         },
         else => return err,

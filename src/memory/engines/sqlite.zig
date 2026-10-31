@@ -18,9 +18,7 @@ const MemoryCategory = root.MemoryCategory;
 const MemoryEntry = root.MemoryEntry;
 const log = std.log.scoped(.memory_sqlite);
 
-pub const c = @cImport({
-    @cInclude("sqlite3.h");
-});
+pub const c = @import("sqlite_c");
 
 pub const SQLITE_STATIC: c.sqlite3_destructor_type = null;
 const BUSY_TIMEOUT_MS: c_int = 5000;
@@ -2650,7 +2648,7 @@ test "SqliteMemory.init on non-sqlite file errors and frees the partially-opened
     const blocker_path = try @import("compat").fs.Dir.wrap(tmp.dir).realpathAlloc(alloc, "blocker.db");
     defer alloc.free(blocker_path);
 
-    const blocker_pathz = try alloc.dupeZ(u8, blocker_path);
+    const blocker_pathz = try alloc.dupeSentinel(u8, blocker_path, 0);
     defer alloc.free(blocker_pathz);
 
     // Expect SOME error from the migrations layer. We accept a small set of

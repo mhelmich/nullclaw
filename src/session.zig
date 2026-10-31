@@ -108,7 +108,7 @@ fn safeMessageLogPreview(allocator: Allocator, text: []const u8) SafeMessageLogP
 }
 
 test "messageLogPreview keeps UTF-8 intact when truncating" {
-    const prefix = "a" ** (MESSAGE_LOG_MAX_BYTES - 1);
+    const prefix = &@import("util/repeat.zig").repeat("a", (MESSAGE_LOG_MAX_BYTES - 1));
     const preview = messageLogPreview(prefix ++ "\xd0\x99tail");
     try std.testing.expectEqualStrings(prefix, preview.slice);
     try std.testing.expect(preview.truncated);
@@ -2373,7 +2373,7 @@ const CaptureMessagesProvider = struct {
     response: []const u8 = "ok",
     chat_calls: usize = 0,
     user_count: usize = 0,
-    user_lens: [4]usize = [_]usize{0} ** 4,
+    user_lens: [4]usize = @splat(0),
     user_bufs: [4][128]u8 = undefined,
 
     const vtable = Provider.VTable{
@@ -2442,7 +2442,7 @@ const LateInjectionProvider = struct {
     chat_calls: usize = 0,
     route_action: ?SessionManager.InboundRouteAction = null,
     user_count: usize = 0,
-    user_lens: [4]usize = [_]usize{0} ** 4,
+    user_lens: [4]usize = @splat(0),
     user_bufs: [4][128]u8 = undefined,
 
     const vtable = Provider.VTable{

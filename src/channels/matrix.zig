@@ -720,7 +720,7 @@ pub const MatrixChannel = struct {
                 const local = user_id[1..colon_idx];
                 var mention_buf: [256]u8 = undefined;
                 const handle = std.fmt.bufPrint(&mention_buf, "@{s}", .{local}) catch return false;
-                if (std.ascii.indexOfIgnoreCase(body, handle) != null) return true;
+                if (std.ascii.findIgnoreCase(body, handle) != null) return true;
             }
         }
 
@@ -1912,7 +1912,7 @@ test "MatrixChannel nextBatchChanged only flags actual position advances" {
     try std.testing.expect(ch.nextBatchChanged("abcd"));
 
     // Opaque Matrix cursors must never be truncated into an invalid token.
-    try std.testing.expectError(error.NextBatchTooLong, ch.setNextBatch("s" ++ "a" ** 2000));
+    try std.testing.expectError(error.NextBatchTooLong, ch.setNextBatch("s" ++ &@import("../util/repeat.zig").repeat("a", 2000)));
     try std.testing.expectEqualStrings("abc", ch.nextBatch());
 }
 
@@ -2113,7 +2113,7 @@ test "MatrixChannel next_batch persistence is identity-bound and roundtrips" {
             allocator,
             dir,
             "oversized-writer-account",
-            "h" ** (MatrixChannel.NEXT_BATCH_STORE_MAX_BYTES + 1),
+            &@import("../util/repeat.zig").repeat("h", (MatrixChannel.NEXT_BATCH_STORE_MAX_BYTES + 1)),
             null,
             "test-access-token",
             "cursor",
@@ -2205,8 +2205,8 @@ test "MatrixChannel next_batch paths do not collide after sanitization" {
     defer allocator.free(path_b);
     try std.testing.expect(!std.mem.eql(u8, path_a, path_b));
 
-    const long_a = "a" ** 80 ++ "x";
-    const long_b = "a" ** 80 ++ "y";
+    const long_a = &@import("../util/repeat.zig").repeat("a", 80) ++ "x";
+    const long_b = &@import("../util/repeat.zig").repeat("a", 80) ++ "y";
     const long_path_a = try MatrixChannel.nextBatchPath(allocator, "/tmp", long_a);
     defer allocator.free(long_path_a);
     const long_path_b = try MatrixChannel.nextBatchPath(allocator, "/tmp", long_b);

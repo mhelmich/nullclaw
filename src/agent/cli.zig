@@ -212,10 +212,10 @@ fn maybePrintAllProvidersFailedHint(
 
 fn providerFailureLooksQuotaConstrained(detail: []const u8) bool {
     return providers.reliable.isRateLimited(detail) or
-        std.ascii.indexOfIgnoreCase(detail, "quota") != null or
-        std.ascii.indexOfIgnoreCase(detail, "credit") != null or
-        std.ascii.indexOfIgnoreCase(detail, "billing") != null or
-        std.ascii.indexOfIgnoreCase(detail, "out of credits") != null;
+        std.ascii.findIgnoreCase(detail, "quota") != null or
+        std.ascii.findIgnoreCase(detail, "credit") != null or
+        std.ascii.findIgnoreCase(detail, "billing") != null or
+        std.ascii.findIgnoreCase(detail, "out of credits") != null;
 }
 
 fn writeRateLimitHint(w: *std.Io.Writer, default_provider: []const u8) !void {

@@ -19,7 +19,7 @@ This keeps secrets and network in the host while agent logic stays swappable as 
 ## Prerequisites
 
 - Cloudflare account + [`wrangler`](https://developers.cloudflare.com/workers/wrangler/)
-- Zig `0.16.0`
+- Zig `0.17.0`
 - Telegram bot token
 - OpenAI API key
 

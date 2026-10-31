@@ -233,17 +233,17 @@ pub const LanceDbMemory = struct {
 
         const uuid = try generateUuid(self_.allocator);
         defer self_.allocator.free(uuid);
-        const uuid_z = try self_.allocator.dupeZ(u8, uuid);
+        const uuid_z = try self_.allocator.dupeSentinel(u8, uuid, 0);
         defer self_.allocator.free(uuid_z);
 
         const cat_str = categoryToString(category);
-        const cat_z = try self_.allocator.dupeZ(u8, cat_str);
+        const cat_z = try self_.allocator.dupeSentinel(u8, cat_str, 0);
         defer self_.allocator.free(cat_z);
 
-        const key_z = try self_.allocator.dupeZ(u8, key);
+        const key_z = try self_.allocator.dupeSentinel(u8, key, 0);
         defer self_.allocator.free(key_z);
 
-        const content_z = try self_.allocator.dupeZ(u8, content);
+        const content_z = try self_.allocator.dupeSentinel(u8, content, 0);
         defer self_.allocator.free(content_z);
 
         const now = try std.fmt.allocPrint(self_.allocator, "{d}", .{std_compat.time.timestamp()});
@@ -274,7 +274,7 @@ pub const LanceDbMemory = struct {
         defer if (sid_z) |sz| self_.allocator.free(sz);
 
         if (session_id) |sid| {
-            sid_z = try self_.allocator.dupeZ(u8, sid);
+            sid_z = try self_.allocator.dupeSentinel(u8, sid, 0);
             _ = c.sqlite3_bind_text(stmt, 9, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
         } else {
             _ = c.sqlite3_bind_null(stmt, 9);
@@ -315,7 +315,7 @@ pub const LanceDbMemory = struct {
         var sid_z: ?[:0]u8 = null;
         defer if (sid_z) |sz| allocator.free(sz);
         if (session_id) |sid| {
-            sid_z = try allocator.dupeZ(u8, sid);
+            sid_z = try allocator.dupeSentinel(u8, sid, 0);
             _ = c.sqlite3_bind_text(stmt, 1, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
         }
 
@@ -415,7 +415,7 @@ pub const LanceDbMemory = struct {
         var sid_z: ?[:0]u8 = null;
         defer if (sid_z) |sz| allocator.free(sz);
         if (session_id) |sid| {
-            sid_z = try allocator.dupeZ(u8, sid);
+            sid_z = try allocator.dupeSentinel(u8, sid, 0);
             _ = c.sqlite3_bind_text(stmt, 3, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
         }
 
@@ -461,7 +461,7 @@ pub const LanceDbMemory = struct {
         const self_: *Self = @ptrCast(@alignCast(ptr));
         const db = self_.db orelse return error.NotConnected;
 
-        const key_z = try allocator.dupeZ(u8, key);
+        const key_z = try allocator.dupeSentinel(u8, key, 0);
         defer allocator.free(key_z);
 
         const sql = "SELECT key, text, category, created_at FROM lancedb_memories WHERE key = ?1";
@@ -534,16 +534,16 @@ pub const LanceDbMemory = struct {
 
         if (category != null and session_id != null) {
             const cat_str = categoryToString(category.?);
-            cat_z_buf = try allocator.dupeZ(u8, cat_str);
+            cat_z_buf = try allocator.dupeSentinel(u8, cat_str, 0);
             _ = c.sqlite3_bind_text(stmt, 1, cat_z_buf.?.ptr, @intCast(cat_z_buf.?.len), SQLITE_STATIC);
-            sid_z = try allocator.dupeZ(u8, session_id.?);
+            sid_z = try allocator.dupeSentinel(u8, session_id.?, 0);
             _ = c.sqlite3_bind_text(stmt, 2, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
         } else if (category) |cat| {
             const cat_str = categoryToString(cat);
-            cat_z_buf = try allocator.dupeZ(u8, cat_str);
+            cat_z_buf = try allocator.dupeSentinel(u8, cat_str, 0);
             _ = c.sqlite3_bind_text(stmt, 1, cat_z_buf.?.ptr, @intCast(cat_z_buf.?.len), SQLITE_STATIC);
         } else if (session_id) |sid| {
-            sid_z = try allocator.dupeZ(u8, sid);
+            sid_z = try allocator.dupeSentinel(u8, sid, 0);
             _ = c.sqlite3_bind_text(stmt, 1, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
         }
 
@@ -608,20 +608,20 @@ pub const LanceDbMemory = struct {
 
         if (category != null and session_id != null) {
             const cat_str = categoryToString(category.?);
-            cat_z_buf = try allocator.dupeZ(u8, cat_str);
+            cat_z_buf = try allocator.dupeSentinel(u8, cat_str, 0);
             _ = c.sqlite3_bind_text(stmt, 1, cat_z_buf.?.ptr, @intCast(cat_z_buf.?.len), SQLITE_STATIC);
-            sid_z = try allocator.dupeZ(u8, session_id.?);
+            sid_z = try allocator.dupeSentinel(u8, session_id.?, 0);
             _ = c.sqlite3_bind_text(stmt, 2, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
             _ = c.sqlite3_bind_int64(stmt, 3, @intCast(limit));
             _ = c.sqlite3_bind_int64(stmt, 4, @intCast(offset));
         } else if (category) |cat| {
             const cat_str = categoryToString(cat);
-            cat_z_buf = try allocator.dupeZ(u8, cat_str);
+            cat_z_buf = try allocator.dupeSentinel(u8, cat_str, 0);
             _ = c.sqlite3_bind_text(stmt, 1, cat_z_buf.?.ptr, @intCast(cat_z_buf.?.len), SQLITE_STATIC);
             _ = c.sqlite3_bind_int64(stmt, 2, @intCast(limit));
             _ = c.sqlite3_bind_int64(stmt, 3, @intCast(offset));
         } else if (session_id) |sid| {
-            sid_z = try allocator.dupeZ(u8, sid);
+            sid_z = try allocator.dupeSentinel(u8, sid, 0);
             _ = c.sqlite3_bind_text(stmt, 1, sid_z.?.ptr, @intCast(sid_z.?.len), SQLITE_STATIC);
             _ = c.sqlite3_bind_int64(stmt, 2, @intCast(limit));
             _ = c.sqlite3_bind_int64(stmt, 3, @intCast(offset));
@@ -665,7 +665,7 @@ pub const LanceDbMemory = struct {
         const self_: *Self = @ptrCast(@alignCast(ptr));
         const db = self_.db orelse return error.NotConnected;
 
-        const key_z = try self_.allocator.dupeZ(u8, key);
+        const key_z = try self_.allocator.dupeSentinel(u8, key, 0);
         defer self_.allocator.free(key_z);
 
         const sql = "DELETE FROM lancedb_memories WHERE key = ?1";

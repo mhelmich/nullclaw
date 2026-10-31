@@ -276,11 +276,11 @@ pub const CronNormalized = struct {
 const MAX_CRON_LOOKAHEAD_MINUTES: usize = 8 * 366 * 24 * 60;
 
 const ParsedCronExpression = struct {
-    minutes: [60]bool = .{false} ** 60,
-    hours: [24]bool = .{false} ** 24,
-    day_of_month: [32]bool = .{false} ** 32, // 1..31
-    months: [13]bool = .{false} ** 13, // 1..12
-    day_of_week: [7]bool = .{false} ** 7, // 0..6 (0=Sun)
+    minutes: [60]bool = @splat(false),
+    hours: [24]bool = @splat(false),
+    day_of_month: [32]bool = @splat(false), // 1..31
+    months: [13]bool = @splat(false), // 1..12
+    day_of_week: [7]bool = @splat(false), // 0..6 (0=Sun)
     day_of_month_any: bool = false,
     day_of_week_any: bool = false,
 };
@@ -3184,15 +3184,13 @@ test "save and load roundtrip keeps agent fields" {
 test "cliAddAgentOnce persists delivery routing" {
     // Regression: once-agent delivery fields must survive CLI storage and reload.
     if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
-    const c = @cImport({
-        @cInclude("stdlib.h");
-    });
+    const c = @import("posix_env");
     const allocator = std.testing.allocator;
 
     cron_store_test_mutex.lock();
     defer cron_store_test_mutex.unlock();
 
-    const env_name = try allocator.dupeZ(u8, "NULLCLAW_HOME");
+    const env_name = try allocator.dupeSentinel(u8, "NULLCLAW_HOME", 0);
     defer allocator.free(env_name);
     const previous_home = std_compat.process.getEnvVarOwned(allocator, "NULLCLAW_HOME") catch |err| switch (err) {
         error.EnvironmentVariableNotFound => null,
@@ -3201,7 +3199,7 @@ test "cliAddAgentOnce persists delivery routing" {
     defer {
         if (previous_home) |value| {
             defer allocator.free(value);
-            const value_z = allocator.dupeZ(u8, value) catch unreachable;
+            const value_z = allocator.dupeSentinel(u8, value, 0) catch unreachable;
             defer allocator.free(value_z);
             _ = c.setenv(env_name.ptr, value_z.ptr, 1);
         } else {
@@ -3215,7 +3213,7 @@ test "cliAddAgentOnce persists delivery routing" {
     defer allocator.free(base);
     const test_home = try std_compat.fs.path.join(allocator, &.{ base, "nullclaw-home" });
     defer allocator.free(test_home);
-    const test_home_z = try allocator.dupeZ(u8, test_home);
+    const test_home_z = try allocator.dupeSentinel(u8, test_home, 0);
     defer allocator.free(test_home_z);
     try std.testing.expectEqual(@as(c_int, 0), c.setenv(env_name.ptr, test_home_z.ptr, 1));
 

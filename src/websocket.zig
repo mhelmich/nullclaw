@@ -395,7 +395,7 @@ pub const WsClient = struct {
         try self.readExact(&hdr);
 
         const fin = (hdr[0] & 0x80) != 0;
-        const opcode: Opcode = @enumFromInt(hdr[0] & 0x0F);
+        const opcode: Opcode = @fromBackingInt(@intCast(hdr[0] & 0x0F));
         const is_masked = (hdr[1] & 0x80) != 0;
         var payload_len: u64 = hdr[1] & 0x7F;
         if (payload_len == 126) {
@@ -453,7 +453,7 @@ pub const WsClient = struct {
         var hlen: usize = 0;
 
         // FIN=1, RSV=0, opcode
-        header[0] = 0x80 | @as(u8, @intFromEnum(opcode));
+        header[0] = 0x80 | @as(u8, @backingInt(opcode));
         hlen = 1;
 
         // MASK=1 + payload length
@@ -647,7 +647,7 @@ pub fn buildFrame(
     var w: std.Io.Writer = .fixed(buf);
 
     // Byte 0: FIN=1, RSV=0, opcode
-    try w.writeByte(0x80 | @as(u8, @intFromEnum(opcode)));
+    try w.writeByte(0x80 | @as(u8, @backingInt(opcode)));
 
     // Byte 1: MASK=1 + payload length
     const plen = payload.len;
@@ -694,7 +694,7 @@ pub const ParsedHeader = struct {
 pub fn parseFrameHeader(bytes: []const u8) !ParsedHeader {
     if (bytes.len < 2) return error.InsufficientData;
     const fin = (bytes[0] & 0x80) != 0;
-    const opcode: Opcode = @enumFromInt(bytes[0] & 0x0F);
+    const opcode: Opcode = @fromBackingInt(@intCast(bytes[0] & 0x0F));
     const masked = (bytes[1] & 0x80) != 0;
     var payload_len: u64 = bytes[1] & 0x7F;
     var hlen: usize = 2;
@@ -778,7 +778,7 @@ fn writeServerFrame(fd: std.posix.fd_t, fin: bool, opcode: Opcode, payload: []co
     if (payload.len > 125) return error.TestUnexpectedResult;
 
     const header = [_]u8{
-        (if (fin) @as(u8, 0x80) else 0) | @as(u8, @intFromEnum(opcode)),
+        (if (fin) @as(u8, 0x80) else 0) | @as(u8, @backingInt(opcode)),
         @intCast(payload.len),
     };
     try writeAllFd(fd, &header);
@@ -832,12 +832,12 @@ test "ws handshake key is 24 chars base64" {
 }
 
 test "ws opcode enum values" {
-    try std.testing.expectEqual(@as(u4, 0), @intFromEnum(Opcode.continuation));
-    try std.testing.expectEqual(@as(u4, 1), @intFromEnum(Opcode.text));
-    try std.testing.expectEqual(@as(u4, 2), @intFromEnum(Opcode.binary));
-    try std.testing.expectEqual(@as(u4, 8), @intFromEnum(Opcode.close));
-    try std.testing.expectEqual(@as(u4, 9), @intFromEnum(Opcode.ping));
-    try std.testing.expectEqual(@as(u4, 10), @intFromEnum(Opcode.pong));
+    try std.testing.expectEqual(@as(u4, 0), @backingInt(Opcode.continuation));
+    try std.testing.expectEqual(@as(u4, 1), @backingInt(Opcode.text));
+    try std.testing.expectEqual(@as(u4, 2), @backingInt(Opcode.binary));
+    try std.testing.expectEqual(@as(u4, 8), @backingInt(Opcode.close));
+    try std.testing.expectEqual(@as(u4, 9), @backingInt(Opcode.ping));
+    try std.testing.expectEqual(@as(u4, 10), @backingInt(Opcode.pong));
 }
 
 test "ws buildFrame text empty payload" {

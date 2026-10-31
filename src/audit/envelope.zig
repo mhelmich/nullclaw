@@ -186,7 +186,7 @@ pub const TokenTypeFingerprint = enum {
 
 pub fn computeShannonEntropy(text: []const u8) f64 {
     if (text.len == 0) return 0.0;
-    var counts = [_]usize{0} ** 256;
+    var counts: [256]usize = @splat(0);
     for (text) |ch| counts[ch] += 1;
     const len_f: f64 = @floatFromInt(text.len);
     var entropy: f64 = 0.0;

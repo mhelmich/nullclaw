@@ -69,7 +69,7 @@ pub const DaemonState = struct {
     started: bool = false,
     gateway_host: []const u8 = "127.0.0.1",
     gateway_port: u16 = 3000,
-    components: [MAX_COMPONENTS]?ComponentStatus = .{null} ** MAX_COMPONENTS,
+    components: [MAX_COMPONENTS]?ComponentStatus = @splat(null),
     component_count: usize = 0,
     tunnel_provider: []const u8 = "none",
     tunnel_url: ?[]const u8 = null,
@@ -1463,7 +1463,7 @@ fn inboundDispatcherThread(
 
     var worker_queues: [INBOUND_DISPATCH_WORKER_COUNT]InboundDispatchQueue = undefined;
     var worker_ctxs: [INBOUND_DISPATCH_WORKER_COUNT]InboundWorkerCtx = undefined;
-    var worker_threads: [INBOUND_DISPATCH_WORKER_COUNT]?std.Thread = .{null} ** INBOUND_DISPATCH_WORKER_COUNT;
+    var worker_threads: [INBOUND_DISPATCH_WORKER_COUNT]?std.Thread = @splat(null);
     var worker_count: usize = 0;
     while (worker_count < INBOUND_DISPATCH_WORKER_COUNT) : (worker_count += 1) {
         worker_queues[worker_count] = InboundDispatchQueue.init();
@@ -3034,7 +3034,7 @@ test "nextOutboundDraftId stays unique across concurrent callers" {
     }
     for (threads) |thread| thread.join();
 
-    var seen: [results.len + 1]bool = [_]bool{false} ** (results.len + 1);
+    var seen: [results.len + 1]bool = @splat(false);
     for (results) |id| {
         // Regression: daemon draft IDs must remain unique after replacing the
         // mutex-protected counter with portable atomic access on 32-bit targets.
@@ -3125,7 +3125,7 @@ test "hasSupervisedChannels true for nostr" {
     };
     var ns_cfg = config_types.NostrConfig{
         .private_key = "enc2:abc",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("util/repeat.zig").repeat("a", 64),
     };
     config.channels.nostr = &ns_cfg;
     try std.testing.expect(hasSupervisedChannels(&config));
@@ -3170,13 +3170,11 @@ test "scheduler backoff progression" {
 
 test "mergeSchedulerTickChangesAndSave preserves externally added jobs" {
     if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
-    const c = @cImport({
-        @cInclude("stdlib.h");
-    });
+    const c = @import("posix_env");
     const allocator = std.testing.allocator;
     const cmd_runtime = "echo merge_runtime_keep_7d1c";
     const cmd_external = "echo merge_external_add_9a42";
-    const env_name = try allocator.dupeZ(u8, "NULLCLAW_HOME");
+    const env_name = try allocator.dupeSentinel(u8, "NULLCLAW_HOME", 0);
     defer allocator.free(env_name);
     const previous_home = std_compat.process.getEnvVarOwned(allocator, "NULLCLAW_HOME") catch |err| switch (err) {
         error.EnvironmentVariableNotFound => null,
@@ -3185,7 +3183,7 @@ test "mergeSchedulerTickChangesAndSave preserves externally added jobs" {
     defer {
         if (previous_home) |value| {
             defer allocator.free(value);
-            const value_z = allocator.dupeZ(u8, value) catch unreachable;
+            const value_z = allocator.dupeSentinel(u8, value, 0) catch unreachable;
             defer allocator.free(value_z);
             _ = c.setenv(env_name.ptr, value_z.ptr, 1);
         } else {
@@ -3199,7 +3197,7 @@ test "mergeSchedulerTickChangesAndSave preserves externally added jobs" {
     defer allocator.free(base);
     const test_home = try std_compat.fs.path.join(allocator, &.{ base, "nullclaw-home" });
     defer allocator.free(test_home);
-    const test_home_z = try allocator.dupeZ(u8, test_home);
+    const test_home_z = try allocator.dupeSentinel(u8, test_home, 0);
     defer allocator.free(test_home_z);
     try std.testing.expectEqual(@as(c_int, 0), c.setenv(env_name.ptr, test_home_z.ptr, 1));
 
@@ -3281,11 +3279,9 @@ test "heartbeatDeliveryConfig enriches routing" {
 
 test "mergeSchedulerTickChangesAndSave preserves runtime agent fields" {
     if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
-    const c = @cImport({
-        @cInclude("stdlib.h");
-    });
+    const c = @import("posix_env");
     const allocator = std.testing.allocator;
-    const env_name = try allocator.dupeZ(u8, "NULLCLAW_HOME");
+    const env_name = try allocator.dupeSentinel(u8, "NULLCLAW_HOME", 0);
     defer allocator.free(env_name);
     const previous_home = std_compat.process.getEnvVarOwned(allocator, "NULLCLAW_HOME") catch |err| switch (err) {
         error.EnvironmentVariableNotFound => null,
@@ -3294,7 +3290,7 @@ test "mergeSchedulerTickChangesAndSave preserves runtime agent fields" {
     defer {
         if (previous_home) |value| {
             defer allocator.free(value);
-            const value_z = allocator.dupeZ(u8, value) catch unreachable;
+            const value_z = allocator.dupeSentinel(u8, value, 0) catch unreachable;
             defer allocator.free(value_z);
             _ = c.setenv(env_name.ptr, value_z.ptr, 1);
         } else {
@@ -3308,7 +3304,7 @@ test "mergeSchedulerTickChangesAndSave preserves runtime agent fields" {
     defer allocator.free(base);
     const test_home = try std_compat.fs.path.join(allocator, &.{ base, "nullclaw-home" });
     defer allocator.free(test_home);
-    const test_home_z = try allocator.dupeZ(u8, test_home);
+    const test_home_z = try allocator.dupeSentinel(u8, test_home, 0);
     defer allocator.free(test_home_z);
     try std.testing.expectEqual(@as(c_int, 0), c.setenv(env_name.ptr, test_home_z.ptr, 1));
 

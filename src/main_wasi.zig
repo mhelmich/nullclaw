@@ -319,7 +319,7 @@ fn daily_log_path(allocator: std.mem.Allocator, workspace: []const u8) ![]u8 {
     const md = yd.calculateMonthDay();
     const file_name = try std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2}.md", .{
         yd.year,
-        @intFromEnum(md.month),
+        @backingInt(md.month),
         md.day_index + 1,
     });
     const memory_dir = try join_path(allocator, workspace, "memory");

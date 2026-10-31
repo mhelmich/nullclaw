@@ -1171,10 +1171,10 @@ test "tunnel stop clears state" {
 }
 
 test "TunnelState values" {
-    try std.testing.expect(@intFromEnum(TunnelState.stopped) == 0);
-    try std.testing.expect(@intFromEnum(TunnelState.starting) == 1);
-    try std.testing.expect(@intFromEnum(TunnelState.running) == 2);
-    try std.testing.expect(@intFromEnum(TunnelState.error_state) == 3);
+    try std.testing.expect(@backingInt(TunnelState.stopped) == 0);
+    try std.testing.expect(@backingInt(TunnelState.starting) == 1);
+    try std.testing.expect(@backingInt(TunnelState.running) == 2);
+    try std.testing.expect(@backingInt(TunnelState.error_state) == 3);
 }
 
 test "TunnelFullConfig defaults" {

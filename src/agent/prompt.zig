@@ -986,7 +986,7 @@ fn appendDateTimeSection(w: anytype, timezone: []const u8) !void {
     const day_seconds = epoch_seconds.getDaySeconds();
 
     const year = year_day.year;
-    const month = @intFromEnum(month_day.month);
+    const month = @backingInt(month_day.month);
     const day = month_day.day_index + 1;
     const hour = day_seconds.getHoursIntoDay();
     const minute = day_seconds.getMinutesIntoHour();
