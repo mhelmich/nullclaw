@@ -168,9 +168,14 @@ containerized runs.
 
 ```bash
 make build
+make build-custom
 make config
 make up
 ```
+
+`make build-custom` builds the Docker image with `cli,slack,signal,web,matrix,email`
+channels and `sqlite,markdown,base` memory engines. Override either list with
+`CHANNELS` or `ENGINES` when needed.
 
 `make config` runs `nullclaw onboard --interactive` inside the agent container.
 Pass only non-secret flags through `CONFIG_ARGS`:
