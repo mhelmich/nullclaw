@@ -646,6 +646,28 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
 
+    // ---------- opt-in live Codex tool-call smoke test ----------
+    if (!is_wasi) {
+        const codex_live_module = b.createModule(.{
+            .root_source_file = b.path("src/codex_live_smoke.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "nullclaw", .module = lib_mod.? },
+                .{ .name = "compat", .module = compat_module },
+            },
+        });
+        const codex_live_exe = b.addExecutable(.{
+            .name = "codex-live-smoke",
+            .root_module = codex_live_module,
+        });
+        const codex_live_build_step = b.step("codex-live-build", "Compile the live Codex tool-call smoke test without running it");
+        codex_live_build_step.dependOn(&codex_live_exe.step);
+        const codex_live_step = b.step("codex-live-test", "Run the authenticated Codex native tool-call smoke test");
+        const codex_live_run = b.addRunArtifact(codex_live_exe);
+        codex_live_step.dependOn(&codex_live_run.step);
+    }
+
     // ---------- tests ----------
     const test_step = b.step("test", "Run all tests");
     if (!is_wasi) {

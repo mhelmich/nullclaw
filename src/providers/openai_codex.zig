@@ -37,6 +37,7 @@ pub const OpenAiCodexProvider = struct {
     refresh_token: ?[]const u8,
     account_id: ?[]const u8,
     expires_at: i64,
+    log_exchange: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, _: ?[]const u8) OpenAiCodexProvider {
         var self = OpenAiCodexProvider{
@@ -85,6 +86,12 @@ pub const OpenAiCodexProvider = struct {
         };
     }
 
+    /// Log request bodies and raw SSE responses when explicitly enabled.
+    /// Logs may contain prompt and response content; disabled by default.
+    pub fn setExchangeLogging(self: *OpenAiCodexProvider, enabled: bool) void {
+        self.log_exchange = enabled;
+    }
+
     const vtable = Provider.VTable{
         .chatWithSystem = chatWithSystemImpl,
         .chat = chatImpl,
@@ -121,7 +128,7 @@ pub const OpenAiCodexProvider = struct {
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        return codexRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, 0);
+        return codexRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, 0);
     }
 
     fn chatImpl(
@@ -140,7 +147,7 @@ pub const OpenAiCodexProvider = struct {
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        const raw = try codexRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, request.timeout_secs);
+        const raw = try codexRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, request.timeout_secs);
         defer allocator.free(raw);
         return try parseCodexChatResponse(allocator, raw, normalizeModel(model));
     }
@@ -163,7 +170,7 @@ pub const OpenAiCodexProvider = struct {
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        return codexStreamRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, request.timeout_secs, callback, callback_ctx);
+        return codexStreamRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, request.timeout_secs, callback, callback_ctx);
     }
 
     fn supportsNativeToolsImpl(_: *anyopaque) bool {
@@ -389,6 +396,7 @@ fn codexRequest(
     allocator: std.mem.Allocator,
     url: []const u8,
     body: []const u8,
+    log_exchange: bool,
     auth_header: []const u8,
     extra_headers: []const []const u8,
     timeout_secs: u64,
@@ -409,7 +417,7 @@ fn codexRequest(
     };
 
     var ctx = NoopCtx{ .list = &accumulated, .alloc = allocator };
-    _ = codexStreamRequest(allocator, url, body, auth_header, extra_headers, timeout_secs, NoopCtx.callback, @ptrCast(&ctx)) catch |err| {
+    _ = codexStreamRequest(allocator, url, body, log_exchange, auth_header, extra_headers, timeout_secs, NoopCtx.callback, @ptrCast(&ctx)) catch |err| {
         return err;
     };
 
@@ -422,6 +430,7 @@ fn codexStreamRequest(
     allocator: std.mem.Allocator,
     url: []const u8,
     body: []const u8,
+    log_exchange: bool,
     auth_header: []const u8,
     extra_headers: []const []const u8,
     timeout_secs: u64,
@@ -531,6 +540,9 @@ fn codexStreamRequest(
     var accumulated: std.ArrayListUnmanaged(u8) = .empty;
     defer accumulated.deinit(allocator);
 
+    var debug_response: std.ArrayListUnmanaged(u8) = .empty;
+    defer debug_response.deinit(allocator);
+
     var line_buf: std.ArrayListUnmanaged(u8) = .empty;
     defer line_buf.deinit(allocator);
 
@@ -544,6 +556,7 @@ fn codexStreamRequest(
     outer: while (true) {
         const n = file.read(&read_buf) catch break;
         if (n == 0) break;
+        if (log_exchange) try debug_response.appendSlice(allocator, read_buf[0..n]);
 
         for (read_buf[0..n]) |byte| {
             if (byte == '\n') {
@@ -635,6 +648,7 @@ fn codexStreamRequest(
         // reliable enough for a deterministic subprocess regression test.
         _ = child.kill() catch {};
         _ = child.wait() catch {};
+        if (log_exchange) logCodexExchange(body, debug_response.items);
         if (accumulated.items.len == 0) return error.NoResponseContent;
         callback(ctx, root.StreamChunk.finalChunk());
         return finalizeCodexStreamResult(allocator, accumulated.items);
@@ -648,30 +662,42 @@ fn codexStreamRequest(
 
     const term = child.wait() catch {
         if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             callback(ctx, root.StreamChunk.finalChunk());
             return finalizeCodexStreamResult(allocator, accumulated.items);
         }
+        if (log_exchange) logCodexExchange(body, debug_response.items);
         return error.CurlWaitError;
     };
     switch (term) {
         .exited => |code| if (code != 0) {
             if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+                if (log_exchange) logCodexExchange(body, debug_response.items);
                 callback(ctx, root.StreamChunk.finalChunk());
                 return finalizeCodexStreamResult(allocator, accumulated.items);
             }
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             return http_util.mapCurlExitCodeToError(code);
         },
         else => {
             if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+                if (log_exchange) logCodexExchange(body, debug_response.items);
                 callback(ctx, root.StreamChunk.finalChunk());
                 return finalizeCodexStreamResult(allocator, accumulated.items);
             }
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             return error.CurlFailed;
         },
     }
 
+    if (log_exchange) logCodexExchange(body, debug_response.items);
     callback(ctx, root.StreamChunk.finalChunk());
     return finalizeCodexStreamResult(allocator, accumulated.items);
+}
+
+fn logCodexExchange(request_body: []const u8, response_body: []const u8) void {
+    // Authorization headers are deliberately excluded. Payloads may contain prompts and answers.
+    std.debug.print("Codex request body:\n{s}\nCodex response body (SSE):\n{s}\n", .{ request_body, response_body });
 }
 
 fn finalizeCodexStreamResult(allocator: std.mem.Allocator, accumulated: []const u8) !StreamChatResult {
@@ -1538,6 +1564,9 @@ test "OpenAiCodexProvider advertises native tool support" {
         .account_id = null,
         .expires_at = 0,
     };
+    try std.testing.expect(!codex.log_exchange);
+    codex.setExchangeLogging(true);
+    try std.testing.expect(codex.log_exchange);
     try std.testing.expect(codex.provider().supportsNativeTools());
     try std.testing.expect(codex.provider().supportsNativeToolHistory());
 }
