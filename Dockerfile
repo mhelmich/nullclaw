@@ -13,6 +13,7 @@ COPY .github/scripts/install-zig.sh .github/scripts/install-zig.sh
 COPY build.zig build.zig.zon ./
 COPY src/ src/
 COPY vendor/sqlite3/ vendor/sqlite3/
+COPY vendor/websocket/ vendor/websocket/
 
 RUN set -eu; \
     mkdir -p /tmp/zig-path; \
