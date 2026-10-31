@@ -155,6 +155,7 @@ pub const RouterProvider = struct {
         .chat = chatImpl,
         .chat_with_tools = chatWithToolsImpl,
         .supportsNativeTools = supportsNativeToolsImpl,
+        .supportsNativeToolHistory = supportsNativeToolHistoryImpl,
         .supports_vision = supportsVisionImpl,
         .supports_vision_for_model = supportsVisionForModelImpl,
         .supports_streaming = supportsStreamingImpl,
@@ -224,6 +225,14 @@ pub const RouterProvider = struct {
         return self.providers[provider_idx].supportsNativeTools();
     }
 
+    fn supportsNativeToolHistoryImpl(ptr: *anyopaque) bool {
+        const self: *RouterProvider = @ptrCast(@alignCast(ptr));
+        const resolved = self.resolve(self.default_model);
+        const provider_idx = resolved[0];
+        if (provider_idx >= self.providers.len) return false;
+        return self.providers[provider_idx].supportsNativeToolHistory();
+    }
+
     fn supportsVisionImpl(ptr: *anyopaque) bool {
         const self: *RouterProvider = @ptrCast(@alignCast(ptr));
         return supportsVisionForModelImpl(ptr, self.default_model);
@@ -289,6 +298,7 @@ pub const RouterProvider = struct {
 const MockProvider = struct {
     response: []const u8,
     native_tools: bool,
+    native_tool_history: bool = false,
     supports_vision: bool = true,
     supports_streaming: bool = false,
     warmup_count: u32 = 0,
@@ -325,6 +335,7 @@ const MockProvider = struct {
         .chat = mockChat,
         .chat_with_tools = mockChatWithTools,
         .supportsNativeTools = mockSupportsNativeTools,
+        .supportsNativeToolHistory = mockSupportsNativeToolHistory,
         .warmup = mockWarmup,
         .supports_streaming = mockSupportsStreaming,
         .stream_chat = mockStreamChat,
@@ -371,6 +382,11 @@ const MockProvider = struct {
     fn mockSupportsNativeTools(ptr: *anyopaque) bool {
         const self: *MockProvider = @ptrCast(@alignCast(ptr));
         return self.native_tools;
+    }
+
+    fn mockSupportsNativeToolHistory(ptr: *anyopaque) bool {
+        const self: *MockProvider = @ptrCast(@alignCast(ptr));
+        return self.native_tool_history;
     }
 
     fn mockWarmup(ptr: *anyopaque) void {
@@ -815,6 +831,27 @@ test "vtable supportsNativeTools follows default model route" {
     defer prov.deinit();
 
     try std.testing.expect(prov.supportsNativeTools());
+}
+
+test "vtable supportsNativeToolHistory follows default model route" {
+    const provider_names = [_][]const u8{ "default", "codex" };
+    var mock_default = MockProvider.init("ok", false);
+    var mock_codex = MockProvider.init("ok", true);
+    mock_codex.native_tool_history = true;
+    const providers = [_]Provider{ mock_default.provider(), mock_codex.provider() };
+    const routes = [_]RouterProvider.RouteEntry{
+        .{ .hint = "codex", .route = .{ .provider_name = "codex", .model = "gpt-codex" } },
+    };
+    var router = try RouterProvider.init(
+        std.testing.allocator,
+        &provider_names,
+        &providers,
+        &routes,
+        "hint:codex",
+    );
+    const prov = router.provider();
+    defer prov.deinit();
+    try std.testing.expect(prov.supportsNativeToolHistory());
 }
 
 test "vtable supportsVisionForModel follows hint routing" {

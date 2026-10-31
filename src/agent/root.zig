@@ -423,13 +423,30 @@ pub const Agent = struct {
     pub const OwnedMessage = struct {
         role: providers.Role,
         content: []const u8,
+        tool_call_id: ?[]const u8 = null,
+        tool_calls: []const providers.ToolCall = &.{},
+        provider_context: ?[]const u8 = null,
 
         pub fn deinit(self: *const OwnedMessage, allocator: std.mem.Allocator) void {
             allocator.free(self.content);
+            if (self.tool_call_id) |id| allocator.free(id);
+            if (self.provider_context) |context| allocator.free(context);
+            for (self.tool_calls) |call| {
+                allocator.free(call.id);
+                allocator.free(call.name);
+                allocator.free(call.arguments);
+            }
+            if (self.tool_calls.len > 0) allocator.free(self.tool_calls);
         }
 
         fn toChatMessage(self: *const OwnedMessage) ChatMessage {
-            return .{ .role = self.role, .content = self.content };
+            return .{
+                .role = self.role,
+                .content = self.content,
+                .tool_call_id = self.tool_call_id,
+                .tool_calls = if (self.tool_calls.len > 0) self.tool_calls else null,
+                .provider_context = self.provider_context,
+            };
         }
     };
 
@@ -2696,14 +2713,33 @@ pub const Agent = struct {
             // Native path (free_assistant_history=true): transfer ownership directly to avoid
             // a redundant allocation; clear the flag so the outer defer does not double-free.
             // XML path (free_assistant_history=false): response_text is not owned, must dupe.
-            const assistant_content: []const u8 = if (free_assistant_history) blk: {
-                free_assistant_history = false;
-                break :blk assistant_history_content;
-            } else try self.allocator.dupe(u8, assistant_history_content);
-
-            // Once appended, history owns the buffer.
-            const safe_assistant_content = try self.redactOwnedForHistory(assistant_content);
-            try self.appendOwnedHistoryMessage(.{ .role = .assistant, .content = safe_assistant_content });
+            const native_tool_history = native_tools_enabled and self.provider.supportsNativeToolHistory();
+            {
+                const assistant_content: []const u8 = if (native_tool_history)
+                    try self.dupeForHistory(display_text)
+                else if (free_assistant_history) blk: {
+                    free_assistant_history = false;
+                    break :blk assistant_history_content;
+                } else try self.allocator.dupe(u8, assistant_history_content);
+                const safe_assistant_content = try self.redactOwnedForHistory(assistant_content);
+                errdefer self.allocator.free(safe_assistant_content);
+                const assistant_tool_calls = if (native_tool_history)
+                    try duplicateCodexToolCalls(self.allocator, parsed_calls)
+                else
+                    &.{};
+                errdefer freeOwnedCodexToolCalls(self.allocator, assistant_tool_calls);
+                const provider_context = if (native_tool_history) blk: {
+                    if (response.provider_context) |context| break :blk try self.allocator.dupe(u8, context);
+                    break :blk null;
+                } else null;
+                errdefer if (provider_context) |context| self.allocator.free(context);
+                try self.history.append(self.allocator, .{
+                    .role = .assistant,
+                    .content = safe_assistant_content,
+                    .tool_calls = assistant_tool_calls,
+                    .provider_context = provider_context,
+                });
+            }
 
             // Execute each tool call
             var results_buf: std.ArrayListUnmanaged(ToolExecutionResult) = .empty;
@@ -2791,6 +2827,21 @@ pub const Agent = struct {
             }
 
             // Format tool results, scrub credentials, add reflection prompt, and add to history
+            if (native_tool_history) {
+                for (results_buf.items) |tool_result| {
+                    const call_id = tool_result.tool_call_id orelse continue;
+                    const scrubbed_output = try providers.scrubToolOutput(self.allocator, tool_result.output);
+                    const safe_output = try self.redactOwnedForHistory(scrubbed_output);
+                    errdefer self.allocator.free(safe_output);
+                    const owned_call_id = try self.allocator.dupe(u8, call_id);
+                    errdefer self.allocator.free(owned_call_id);
+                    try self.history.append(self.allocator, .{
+                        .role = .tool,
+                        .content = safe_output,
+                        .tool_call_id = owned_call_id,
+                    });
+                }
+            }
             const formatted_results = try dispatcher.formatToolResults(arena, results_buf.items);
             const scrubbed_results = try providers.scrubToolOutput(arena, formatted_results);
             const redacted_results = if (self.redactor) |r| try r.redact(arena, scrubbed_results) else scrubbed_results;
@@ -3814,10 +3865,14 @@ pub const Agent = struct {
         if (resp.reasoning_content) |rc| {
             if (rc.len > 0) self.allocator.free(rc);
         }
+        if (resp.provider_context) |context| {
+            if (context.len > 0) self.allocator.free(context);
+        }
         // Mark as consumed to prevent double-free
         resp.content = null;
         resp.tool_calls = &.{};
         resp.provider = "";
+        resp.provider_context = null;
         resp.model = "";
         resp.reasoning_content = null;
     }
@@ -3902,6 +3957,53 @@ pub const run = cli.run;
 // Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
+fn duplicateCodexToolCalls(allocator: std.mem.Allocator, calls: []const ParsedToolCall) ![]providers.ToolCall {
+    var count: usize = 0;
+    for (calls) |call| if (call.tool_call_id != null) {
+        count += 1;
+    };
+    if (count == 0) return &.{};
+    const owned = try allocator.alloc(providers.ToolCall, count);
+    var idx: usize = 0;
+    errdefer {
+        for (owned[0..idx]) |call| {
+            allocator.free(call.id);
+            allocator.free(call.name);
+            allocator.free(call.arguments);
+        }
+        allocator.free(owned);
+    }
+    for (calls) |call| {
+        const id = call.tool_call_id orelse continue;
+        const owned_id = try allocator.dupe(u8, id);
+        const owned_name = allocator.dupe(u8, call.name) catch |err| {
+            allocator.free(owned_id);
+            return err;
+        };
+        const owned_arguments = allocator.dupe(u8, call.arguments_json) catch |err| {
+            allocator.free(owned_id);
+            allocator.free(owned_name);
+            return err;
+        };
+        owned[idx] = .{
+            .id = owned_id,
+            .name = owned_name,
+            .arguments = owned_arguments,
+        };
+        idx += 1;
+    }
+    return owned;
+}
+
+fn freeOwnedCodexToolCalls(allocator: std.mem.Allocator, calls: []const providers.ToolCall) void {
+    for (calls) |call| {
+        allocator.free(call.id);
+        allocator.free(call.name);
+        allocator.free(call.arguments);
+    }
+    if (calls.len > 0) allocator.free(calls);
+}
+
 test "Agent.OwnedMessage toChatMessage" {
     const msg = Agent.OwnedMessage{
         .role = .user,
@@ -3910,6 +4012,26 @@ test "Agent.OwnedMessage toChatMessage" {
     const chat = msg.toChatMessage();
     try std.testing.expect(chat.role == .user);
     try std.testing.expectEqualStrings("hello", chat.content);
+}
+
+test "duplicateCodexToolCalls preserves native call IDs and arguments" {
+    const parsed = [_]ParsedToolCall{
+        .{ .tool_call_id = "call_1", .name = "echo", .arguments_json = "{\"text\":\"hi\"}" },
+        .{ .name = "legacy", .arguments_json = "{}" },
+    };
+    const calls = try duplicateCodexToolCalls(std.testing.allocator, &parsed);
+    defer {
+        for (calls) |call| {
+            std.testing.allocator.free(call.id);
+            std.testing.allocator.free(call.name);
+            std.testing.allocator.free(call.arguments);
+        }
+        std.testing.allocator.free(calls);
+    }
+    try std.testing.expectEqual(@as(usize, 1), calls.len);
+    try std.testing.expectEqualStrings("call_1", calls[0].id);
+    try std.testing.expectEqualStrings("echo", calls[0].name);
+    try std.testing.expectEqualStrings("{\"text\":\"hi\"}", calls[0].arguments);
 }
 
 test "Agent trim history preserves system prompt" {
