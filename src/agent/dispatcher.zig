@@ -78,6 +78,34 @@ pub fn parseToolCalls(
     allocator: std.mem.Allocator,
     response: []const u8,
 ) !ParseResult {
+    // Some models wrap the same control block in U+27EA/U+27EB brackets.
+    // Normalize only the exact delimiters so ordinary Unicode in arguments/text
+    // remains untouched and the existing strict-tag parser stays authoritative.
+    if (std.mem.indexOf(u8, response, "⟪tool_call⟫") != null or
+        std.mem.indexOf(u8, response, "⟪/tool_call⟫") != null)
+    {
+        var normalized: std.ArrayListUnmanaged(u8) = .empty;
+        defer normalized.deinit(allocator);
+        var rest = response;
+        while (true) {
+            const open = std.mem.indexOf(u8, rest, "⟪tool_call⟫");
+            const close = std.mem.indexOf(u8, rest, "⟪/tool_call⟫");
+            const next = if (open == null) close else if (close == null) open else @as(?usize, @min(open.?, close.?));
+            const pos = next orelse {
+                try normalized.appendSlice(allocator, rest);
+                break;
+            };
+            try normalized.appendSlice(allocator, rest[0..pos]);
+            if (open != null and pos == open.?) {
+                try normalized.appendSlice(allocator, "<tool_call>");
+                rest = rest[pos + "⟪tool_call⟫".len ..];
+            } else {
+                try normalized.appendSlice(allocator, "</tool_call>");
+                rest = rest[pos + "⟪/tool_call⟫".len ..];
+            }
+        }
+        return parseToolCalls(allocator, normalized.items);
+    }
     // First: try OpenAI native JSON format {"tool_calls": [...]}
     if (isNativeJsonFormat(response)) {
         const native = parseNativeToolCalls(allocator, response) catch null;
@@ -110,7 +138,9 @@ pub fn containsToolCallMarkup(text: []const u8) bool {
         std.mem.indexOf(u8, text, "[TOOL_CALL]") != null or
         std.mem.indexOf(u8, text, "[tool_call]") != null or
         std.mem.indexOf(u8, text, "[/TOOL_CALL]") != null or
-        std.mem.indexOf(u8, text, "[/tool_call]") != null;
+        std.mem.indexOf(u8, text, "[/tool_call]") != null or
+        std.mem.indexOf(u8, text, "⟪tool_call⟫") != null or
+        std.mem.indexOf(u8, text, "⟪/tool_call⟫") != null;
 }
 
 fn freeParsedToolCall(allocator: std.mem.Allocator, call: ParsedToolCall) void {
@@ -1487,6 +1517,27 @@ test "parseToolCalls extracts single call" {
     try std.testing.expectEqual(@as(usize, 1), result.calls.len);
     try std.testing.expectEqualStrings("shell", result.calls[0].name);
     try std.testing.expect(std.mem.indexOf(u8, result.calls[0].arguments_json, "ls -la") != null);
+}
+
+test "parseToolCalls accepts Unicode angle tool delimiters" {
+    const allocator = std.testing.allocator;
+    const response =
+        "⟪tool_call⟫\n{" ++
+        "\"name\":\"http_request\",\"arguments\":{\"url\":\"https://example.com/\",\"method\":\"GET\"}}\n" ++
+        "⟪/tool_call⟫";
+    const result = try parseToolCalls(allocator, response);
+    defer {
+        if (result.text.len > 0) allocator.free(result.text);
+        for (result.calls) |call| {
+            allocator.free(call.name);
+            allocator.free(call.arguments_json);
+        }
+        allocator.free(result.calls);
+    }
+    try std.testing.expectEqual(@as(usize, 1), result.calls.len);
+    try std.testing.expectEqualStrings("http_request", result.calls[0].name);
+    try std.testing.expect(std.mem.indexOf(u8, result.calls[0].arguments_json, "https://example.com/") != null);
+    try std.testing.expect(containsToolCallMarkup(response));
 }
 
 test "parseToolCalls extracts multiple calls" {
