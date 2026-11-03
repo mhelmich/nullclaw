@@ -37,6 +37,7 @@ pub const OpenAiCodexProvider = struct {
     refresh_token: ?[]const u8,
     account_id: ?[]const u8,
     expires_at: i64,
+    log_exchange: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, _: ?[]const u8) OpenAiCodexProvider {
         var self = OpenAiCodexProvider{
@@ -85,10 +86,17 @@ pub const OpenAiCodexProvider = struct {
         };
     }
 
+    /// Log request bodies and raw SSE responses when explicitly enabled.
+    /// Logs may contain prompt and response content; disabled by default.
+    pub fn setExchangeLogging(self: *OpenAiCodexProvider, enabled: bool) void {
+        self.log_exchange = enabled;
+    }
+
     const vtable = Provider.VTable{
         .chatWithSystem = chatWithSystemImpl,
         .chat = chatImpl,
         .supportsNativeTools = supportsNativeToolsImpl,
+        .supportsNativeToolHistory = supportsNativeToolHistoryImpl,
         .supports_vision = supportsVisionImpl,
         .getName = getNameImpl,
         .deinit = deinitImpl,
@@ -120,7 +128,7 @@ pub const OpenAiCodexProvider = struct {
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        return codexRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, 0);
+        return codexRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, 0);
     }
 
     fn chatImpl(
@@ -133,18 +141,15 @@ pub const OpenAiCodexProvider = struct {
         const self: *OpenAiCodexProvider = @ptrCast(@alignCast(ptr));
         const token = try self.getValidToken();
 
-        const body = try buildCodexBody(allocator, null, request.messages, normalizeModel(model), request.reasoning_effort);
+        const body = try buildCodexBody(allocator, null, request.messages, normalizeModel(model), request.reasoning_effort, request.tools);
         defer allocator.free(body);
 
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        const content = try codexRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, request.timeout_secs);
-
-        return .{
-            .content = content,
-            .model = try allocator.dupe(u8, normalizeModel(model)),
-        };
+        const raw = try codexRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, request.timeout_secs);
+        defer allocator.free(raw);
+        return try parseCodexChatResponse(allocator, raw, normalizeModel(model));
     }
 
     fn streamChatImpl(
@@ -159,17 +164,21 @@ pub const OpenAiCodexProvider = struct {
         const self: *OpenAiCodexProvider = @ptrCast(@alignCast(ptr));
         const token = try self.getValidToken();
 
-        const body = try buildCodexBody(allocator, null, request.messages, normalizeModel(model), request.reasoning_effort);
+        const body = try buildCodexBody(allocator, null, request.messages, normalizeModel(model), request.reasoning_effort, request.tools);
         defer allocator.free(body);
 
         var auth_hdr_buf: [2048]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{token}) catch return error.CodexApiError;
 
-        return codexStreamRequest(allocator, CODEX_API_URL, body, auth_hdr, &.{}, request.timeout_secs, callback, callback_ctx);
+        return codexStreamRequest(allocator, CODEX_API_URL, body, self.log_exchange, auth_hdr, &.{}, request.timeout_secs, callback, callback_ctx);
     }
 
     fn supportsNativeToolsImpl(_: *anyopaque) bool {
-        return false;
+        return true;
+    }
+
+    fn supportsNativeToolHistoryImpl(_: *anyopaque) bool {
+        return true;
     }
 
     fn supportsVisionImpl(_: *anyopaque) bool {
@@ -242,6 +251,7 @@ fn buildCodexBody(
     messages: []const ChatMessage,
     model: []const u8,
     reasoning_effort: ?[]const u8,
+    tools: ?[]const root.ToolSpec,
 ) ![]const u8 {
     var buf: std.ArrayListUnmanaged(u8) = .empty;
     errdefer buf.deinit(allocator);
@@ -266,25 +276,76 @@ fn buildCodexBody(
         try buf.appendSlice(allocator, "\"You are a helpful assistant.\"");
     }
 
-    // Build input items array — last user message becomes input, rest are context
+    // Build Responses API input items, retaining native function calls and results.
     try buf.appendSlice(allocator, ",\"input\":[");
     var first = true;
     for (messages) |msg| {
-        if (msg.role == .system) continue;
-        if (!first) try buf.append(allocator, ',');
-        first = false;
-
-        if (msg.role == .user) {
-            try buf.appendSlice(allocator, "{\"type\":\"message\",\"role\":\"user\",\"content\":");
-            try root.appendJsonString(&buf, allocator, msg.content);
-            try buf.append(allocator, '}');
-        } else if (msg.role == .assistant) {
-            try buf.appendSlice(allocator, "{\"type\":\"message\",\"role\":\"assistant\",\"content\":");
-            try root.appendJsonString(&buf, allocator, msg.content);
-            try buf.append(allocator, '}');
+        switch (msg.role) {
+            .system => continue,
+            .user, .assistant => {
+                if (msg.role == .assistant) if (msg.provider_context) |context_json| {
+                    const parsed_context = try std.json.parseFromSlice(std.json.Value, allocator, context_json, .{});
+                    defer parsed_context.deinit();
+                    if (parsed_context.value != .array) return error.InvalidProviderContext;
+                    for (parsed_context.value.array.items) |item| {
+                        if (!first) try buf.append(allocator, ',');
+                        first = false;
+                        const serialized = try std.json.Stringify.valueAlloc(allocator, item, .{});
+                        defer allocator.free(serialized);
+                        try buf.appendSlice(allocator, serialized);
+                    }
+                };
+                if (msg.content.len > 0) {
+                    if (!first) try buf.append(allocator, ',');
+                    first = false;
+                    try buf.appendSlice(allocator, "{\"type\":\"message\",\"role\":");
+                    try root.appendJsonString(&buf, allocator, msg.role.toSlice());
+                    try buf.appendSlice(allocator, ",\"content\":");
+                    try root.appendJsonString(&buf, allocator, msg.content);
+                    try buf.append(allocator, '}');
+                }
+                if (msg.role == .assistant) if (msg.tool_calls) |calls| {
+                    for (calls) |call| {
+                        if (!first) try buf.append(allocator, ',');
+                        first = false;
+                        try buf.appendSlice(allocator, "{\"type\":\"function_call\",\"call_id\":");
+                        try root.appendJsonString(&buf, allocator, call.id);
+                        try buf.appendSlice(allocator, ",\"name\":");
+                        try root.appendJsonString(&buf, allocator, call.name);
+                        try buf.appendSlice(allocator, ",\"arguments\":");
+                        try root.appendJsonString(&buf, allocator, call.arguments);
+                        try buf.append(allocator, '}');
+                    }
+                };
+            },
+            .tool => {
+                const call_id = msg.tool_call_id orelse return error.MissingToolCallId;
+                if (!first) try buf.append(allocator, ',');
+                first = false;
+                try buf.appendSlice(allocator, "{\"type\":\"function_call_output\",\"call_id\":");
+                try root.appendJsonString(&buf, allocator, call_id);
+                try buf.appendSlice(allocator, ",\"output\":");
+                try root.appendJsonString(&buf, allocator, msg.content);
+                try buf.append(allocator, '}');
+            },
         }
     }
     try buf.append(allocator, ']');
+
+    if (tools) |tool_specs| if (tool_specs.len > 0) {
+        try buf.appendSlice(allocator, ",\"tools\":[");
+        for (tool_specs, 0..) |tool, i| {
+            if (i > 0) try buf.append(allocator, ',');
+            try buf.appendSlice(allocator, "{\"type\":\"function\",\"name\":");
+            try root.appendJsonString(&buf, allocator, tool.name);
+            try buf.appendSlice(allocator, ",\"description\":");
+            try root.appendJsonString(&buf, allocator, tool.description);
+            try buf.appendSlice(allocator, ",\"strict\":false,\"parameters\":");
+            try buf.appendSlice(allocator, tool.parameters_json);
+            try buf.append(allocator, '}');
+        }
+        try buf.appendSlice(allocator, "],\"tool_choice\":\"auto\"");
+    };
 
     // Fixed fields
     try buf.appendSlice(allocator, ",\"store\":false,\"stream\":true");
@@ -335,6 +396,7 @@ fn codexRequest(
     allocator: std.mem.Allocator,
     url: []const u8,
     body: []const u8,
+    log_exchange: bool,
     auth_header: []const u8,
     extra_headers: []const []const u8,
     timeout_secs: u64,
@@ -355,7 +417,7 @@ fn codexRequest(
     };
 
     var ctx = NoopCtx{ .list = &accumulated, .alloc = allocator };
-    _ = codexStreamRequest(allocator, url, body, auth_header, extra_headers, timeout_secs, NoopCtx.callback, @ptrCast(&ctx)) catch |err| {
+    _ = codexStreamRequest(allocator, url, body, log_exchange, auth_header, extra_headers, timeout_secs, NoopCtx.callback, @ptrCast(&ctx)) catch |err| {
         return err;
     };
 
@@ -368,6 +430,7 @@ fn codexStreamRequest(
     allocator: std.mem.Allocator,
     url: []const u8,
     body: []const u8,
+    log_exchange: bool,
     auth_header: []const u8,
     extra_headers: []const []const u8,
     timeout_secs: u64,
@@ -477,6 +540,9 @@ fn codexStreamRequest(
     var accumulated: std.ArrayListUnmanaged(u8) = .empty;
     defer accumulated.deinit(allocator);
 
+    var debug_response: std.ArrayListUnmanaged(u8) = .empty;
+    defer debug_response.deinit(allocator);
+
     var line_buf: std.ArrayListUnmanaged(u8) = .empty;
     defer line_buf.deinit(allocator);
 
@@ -490,6 +556,7 @@ fn codexStreamRequest(
     outer: while (true) {
         const n = file.read(&read_buf) catch break;
         if (n == 0) break;
+        if (log_exchange) try debug_response.appendSlice(allocator, read_buf[0..n]);
 
         for (read_buf[0..n]) |byte| {
             if (byte == '\n') {
@@ -532,7 +599,14 @@ fn codexStreamRequest(
                             .response_completed, .response_done => {
                                 if (is_tool_payload) {
                                     // Completed may repeat tool payloads already emitted from output_item.done.
-                                    if (emitted_tool_payload) continue;
+                                    if (emitted_tool_payload) {
+                                        if (std.mem.indexOf(u8, delta_evt.text, "<codex_context>")) |context_start| {
+                                            const context_payload = delta_evt.text[context_start..];
+                                            try accumulated.appendSlice(allocator, context_payload);
+                                            callback(ctx, root.StreamChunk.textDelta(context_payload));
+                                        }
+                                        continue;
+                                    }
                                     emitted_tool_payload = true;
                                     try accumulated.appendSlice(allocator, delta_evt.text);
                                     callback(ctx, root.StreamChunk.textDelta(delta_evt.text));
@@ -574,6 +648,7 @@ fn codexStreamRequest(
         // reliable enough for a deterministic subprocess regression test.
         _ = child.kill() catch {};
         _ = child.wait() catch {};
+        if (log_exchange) logCodexExchange(body, debug_response.items);
         if (accumulated.items.len == 0) return error.NoResponseContent;
         callback(ctx, root.StreamChunk.finalChunk());
         return finalizeCodexStreamResult(allocator, accumulated.items);
@@ -587,30 +662,42 @@ fn codexStreamRequest(
 
     const term = child.wait() catch {
         if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             callback(ctx, root.StreamChunk.finalChunk());
             return finalizeCodexStreamResult(allocator, accumulated.items);
         }
+        if (log_exchange) logCodexExchange(body, debug_response.items);
         return error.CurlWaitError;
     };
     switch (term) {
         .exited => |code| if (code != 0) {
             if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+                if (log_exchange) logCodexExchange(body, debug_response.items);
                 callback(ctx, root.StreamChunk.finalChunk());
                 return finalizeCodexStreamResult(allocator, accumulated.items);
             }
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             return http_util.mapCurlExitCodeToError(code);
         },
         else => {
             if (root.shouldRecoverPartialStream(accumulated.items.len, saw_terminal)) {
+                if (log_exchange) logCodexExchange(body, debug_response.items);
                 callback(ctx, root.StreamChunk.finalChunk());
                 return finalizeCodexStreamResult(allocator, accumulated.items);
             }
+            if (log_exchange) logCodexExchange(body, debug_response.items);
             return error.CurlFailed;
         },
     }
 
+    if (log_exchange) logCodexExchange(body, debug_response.items);
     callback(ctx, root.StreamChunk.finalChunk());
     return finalizeCodexStreamResult(allocator, accumulated.items);
+}
+
+fn logCodexExchange(request_body: []const u8, response_body: []const u8) void {
+    // Authorization headers are deliberately excluded. Payloads may contain prompts and answers.
+    std.debug.print("Codex request body:\n{s}\nCodex response body (SSE):\n{s}\n", .{ request_body, response_body });
 }
 
 fn finalizeCodexStreamResult(allocator: std.mem.Allocator, accumulated: []const u8) !StreamChatResult {
@@ -714,10 +801,13 @@ fn firstTextFromContent(content_val: std.json.Value) ?[]const u8 {
 fn appendToolCallXml(
     out: *std.ArrayListUnmanaged(u8),
     allocator: std.mem.Allocator,
+    call_id: []const u8,
     name: []const u8,
     arguments_json: []const u8,
 ) !void {
-    try out.appendSlice(allocator, "<tool_call>\n{\"name\":");
+    try out.appendSlice(allocator, "<tool_call>\n{\"id\":");
+    try root.appendJsonString(out, allocator, call_id);
+    try out.appendSlice(allocator, ",\"name\":");
     try root.appendJsonString(out, allocator, name);
     try out.appendSlice(allocator, ",\"arguments\":");
 
@@ -752,6 +842,8 @@ fn extractOutputItemToolCallXml(allocator: std.mem.Allocator, item_obj: std.json
 
     const name_val = item_obj.get("name") orelse return null;
     if (name_val != .string or name_val.string.len == 0) return null;
+    const call_id_val = item_obj.get("call_id") orelse return null;
+    if (call_id_val != .string or call_id_val.string.len == 0) return null;
 
     var args: []const u8 = "{}";
     if (item_obj.get("arguments")) |args_val| {
@@ -762,7 +854,7 @@ fn extractOutputItemToolCallXml(allocator: std.mem.Allocator, item_obj: std.json
 
     var out: std.ArrayListUnmanaged(u8) = .empty;
     errdefer out.deinit(allocator);
-    try appendToolCallXml(&out, allocator, name_val.string, args);
+    try appendToolCallXml(&out, allocator, call_id_val.string, name_val.string, args);
     return try out.toOwnedSlice(allocator);
 }
 
@@ -817,6 +909,18 @@ fn extractCompletedToolCalls(allocator: std.mem.Allocator, root_obj: std.json.Ob
 
     for (output_val.?.array.items) |item| {
         if (item != .object) continue;
+        const ty = item.object.get("type") orelse continue;
+        if (ty != .string or !std.mem.eql(u8, ty.string, "reasoning")) continue;
+        const json = try std.json.Stringify.valueAlloc(allocator, item, .{});
+        defer allocator.free(json);
+        try out.appendSlice(allocator, "<codex_context>");
+        try out.appendSlice(allocator, json);
+        try out.appendSlice(allocator, "</codex_context>");
+    }
+
+    const context_end = out.items.len;
+    for (output_val.?.array.items) |item| {
+        if (item != .object) continue;
         const maybe_xml = try extractOutputItemToolCallXml(allocator, item.object);
         if (maybe_xml) |xml| {
             defer allocator.free(xml);
@@ -824,8 +928,97 @@ fn extractCompletedToolCalls(allocator: std.mem.Allocator, root_obj: std.json.Ob
         }
     }
 
-    if (out.items.len == 0) return null;
+    if (out.items.len == context_end) return null;
     return try out.toOwnedSlice(allocator);
+}
+
+/// Convert the provider's internal tool-call markup envelope into the structured
+/// ChatResponse expected by the agent loop.
+fn parseCodexChatResponse(allocator: std.mem.Allocator, raw: []const u8, model: []const u8) !ChatResponse {
+    const open_tag = "<tool_call>";
+    const close_tag = "</tool_call>";
+    const context_open_tag = "<codex_context>";
+    const context_close_tag = "</codex_context>";
+    var content: std.ArrayListUnmanaged(u8) = .empty;
+    defer content.deinit(allocator);
+    var context_items: std.ArrayListUnmanaged(u8) = .empty;
+    defer context_items.deinit(allocator);
+    var contextless: std.ArrayListUnmanaged(u8) = .empty;
+    defer contextless.deinit(allocator);
+    var calls: std.ArrayListUnmanaged(root.ToolCall) = .empty;
+    errdefer {
+        for (calls.items) |call| {
+            allocator.free(call.id);
+            allocator.free(call.name);
+            allocator.free(call.arguments);
+        }
+        calls.deinit(allocator);
+    }
+
+    var context_remaining = raw;
+    while (std.mem.indexOf(u8, context_remaining, context_open_tag)) |start| {
+        const body_start = start + context_open_tag.len;
+        const end = std.mem.indexOf(u8, context_remaining[body_start..], context_close_tag) orelse return error.InvalidToolCallResponse;
+        const item_json = std.mem.trim(u8, context_remaining[body_start .. body_start + end], " \t\r\n");
+        const parsed_context = try std.json.parseFromSlice(std.json.Value, allocator, item_json, .{});
+        defer parsed_context.deinit();
+        if (context_items.items.len == 0) try context_items.append(allocator, '[') else try context_items.append(allocator, ',');
+        try context_items.appendSlice(allocator, item_json);
+        const tag_end = body_start + end + context_close_tag.len;
+        try contextless.appendSlice(allocator, context_remaining[0..start]);
+        context_remaining = context_remaining[tag_end..];
+    }
+    if (context_items.items.len > 0) try context_items.append(allocator, ']');
+    try contextless.appendSlice(allocator, context_remaining);
+
+    var remaining = contextless.items;
+    while (std.mem.indexOf(u8, remaining, open_tag)) |start| {
+        if (start > 0) try content.appendSlice(allocator, remaining[0..start]);
+        const body_start = start + open_tag.len;
+        const end = std.mem.indexOf(u8, remaining[body_start..], close_tag) orelse return error.InvalidToolCallResponse;
+        const parsed = try std.json.parseFromSlice(std.json.Value, allocator, std.mem.trim(u8, remaining[body_start .. body_start + end], " \t\r\n"), .{});
+        defer parsed.deinit();
+        if (parsed.value != .object) return error.InvalidToolCallResponse;
+        const obj = parsed.value.object;
+        const id = obj.get("id") orelse return error.InvalidToolCallResponse;
+        const name = obj.get("name") orelse return error.InvalidToolCallResponse;
+        const args = obj.get("arguments") orelse return error.InvalidToolCallResponse;
+        if (id != .string or id.string.len == 0 or name != .string or name.string.len == 0) return error.InvalidToolCallResponse;
+        const args_json = if (args == .string)
+            try allocator.dupe(u8, args.string)
+        else
+            try std.json.Stringify.valueAlloc(allocator, args, .{});
+        errdefer allocator.free(args_json);
+        const call_id = try allocator.dupe(u8, id.string);
+        const call_name = allocator.dupe(u8, name.string) catch |err| {
+            allocator.free(call_id);
+            return err;
+        };
+        const call: root.ToolCall = .{
+            .id = call_id,
+            .name = call_name,
+            .arguments = args_json,
+        };
+        errdefer {
+            allocator.free(call.id);
+            allocator.free(call.name);
+        }
+        try calls.append(allocator, call);
+        remaining = remaining[body_start + end + close_tag.len ..];
+    }
+    try content.appendSlice(allocator, remaining);
+
+    const content_owned = try allocator.dupe(u8, std.mem.trim(u8, content.items, " \t\r\n"));
+    errdefer allocator.free(content_owned);
+    const model_owned = try allocator.dupe(u8, model);
+    errdefer allocator.free(model_owned);
+    const context_owned = if (context_items.items.len > 0)
+        try allocator.dupe(u8, context_items.items)
+    else
+        null;
+    errdefer if (context_owned) |context| allocator.free(context);
+    const owned_calls = if (calls.items.len == 0) &.{} else try calls.toOwnedSlice(allocator);
+    return .{ .content = content_owned, .tool_calls = owned_calls, .model = model_owned, .provider_context = context_owned };
 }
 
 /// Parse a single Codex SSE event line.
@@ -1064,7 +1257,7 @@ test "buildCodexBody with system and user messages" {
         .{ .role = .assistant, .content = "Hi there" },
         .{ .role = .user, .content = "How are you?" },
     };
-    const body = try buildCodexBody(std.testing.allocator, null, &messages, "o4-mini", null);
+    const body = try buildCodexBody(std.testing.allocator, null, &messages, "o4-mini", null, null);
     defer std.testing.allocator.free(body);
 
     // Should contain model
@@ -1082,6 +1275,87 @@ test "buildCodexBody with system and user messages" {
     try std.testing.expect(std.mem.indexOf(u8, body, "\"stream\":true") != null);
     // Should contain reasoning
     try std.testing.expect(std.mem.indexOf(u8, body, "\"reasoning\":{") != null);
+}
+
+test "buildCodexBody sends function tools in Responses format" {
+    const messages = [_]ChatMessage{.{ .role = .user, .content = "look up the page" }};
+    const tools = [_]root.ToolSpec{.{
+        .name = "http_request",
+        .description = "Fetch a URL",
+        .parameters_json = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}",
+    }};
+    const body = try buildCodexBody(std.testing.allocator, null, &messages, "gpt-5.4", null, &tools);
+    defer std.testing.allocator.free(body);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, body, .{});
+    defer parsed.deinit();
+    const obj = parsed.value.object;
+    const tool_list = obj.get("tools").?.array;
+    try std.testing.expectEqual(@as(usize, 1), tool_list.items.len);
+    try std.testing.expectEqualStrings("function", tool_list.items[0].object.get("type").?.string);
+    try std.testing.expectEqualStrings("http_request", tool_list.items[0].object.get("name").?.string);
+    try std.testing.expectEqualStrings("auto", obj.get("tool_choice").?.string);
+}
+
+test "buildCodexBody serializes function call and matching output items" {
+    const calls = [_]root.ToolCall{.{
+        .id = "call_1",
+        .name = "http_request",
+        .arguments = "{\"url\":\"https://example.com/\"}",
+    }};
+    const messages = [_]ChatMessage{
+        .{ .role = .user, .content = "fetch example.com" },
+        .{ .role = .assistant, .content = "", .tool_calls = &calls, .provider_context = "[{\"type\":\"reasoning\",\"encrypted_content\":\"opaque\"}]" },
+        .{ .role = .tool, .content = "200 OK", .tool_call_id = "call_1" },
+    };
+    const body = try buildCodexBody(std.testing.allocator, null, &messages, "gpt-5.4", null, null);
+    defer std.testing.allocator.free(body);
+    const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, body, .{});
+    defer parsed.deinit();
+    const input = parsed.value.object.get("input").?.array;
+    try std.testing.expectEqual(@as(usize, 4), input.items.len);
+    try std.testing.expectEqualStrings("reasoning", input.items[1].object.get("type").?.string);
+    try std.testing.expectEqualStrings("function_call", input.items[2].object.get("type").?.string);
+    try std.testing.expectEqualStrings("call_1", input.items[2].object.get("call_id").?.string);
+    try std.testing.expectEqualStrings("function_call_output", input.items[3].object.get("type").?.string);
+    try std.testing.expectEqualStrings("call_1", input.items[3].object.get("call_id").?.string);
+    try std.testing.expectEqualStrings("200 OK", input.items[3].object.get("output").?.string);
+}
+
+test "parseCodexChatResponse returns structured function calls and text" {
+    var response = try parseCodexChatResponse(
+        std.testing.allocator,
+        "<codex_context>{\"type\":\"reasoning\",\"encrypted_content\":\"opaque\"}</codex_context>Checking.\n<tool_call>\n{\"id\":\"call_1\",\"name\":\"http_request\",\"arguments\":\"{\\\"url\\\":\\\"https://example.com/\\\"}\"}\n</tool_call>",
+        "gpt-5.4",
+    );
+    defer response.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("Checking.", response.content.?);
+    try std.testing.expectEqual(@as(usize, 1), response.tool_calls.len);
+    try std.testing.expectEqualStrings("call_1", response.tool_calls[0].id);
+    try std.testing.expectEqualStrings("http_request", response.tool_calls[0].name);
+    try std.testing.expectEqualStrings("{\"url\":\"https://example.com/\"}", response.tool_calls[0].arguments);
+    try std.testing.expectEqualStrings("[{\"type\":\"reasoning\",\"encrypted_content\":\"opaque\"}]", response.provider_context.?);
+}
+
+test "parseCodexChatResponse rejects malformed function call envelopes" {
+    try std.testing.expectError(
+        error.InvalidToolCallResponse,
+        parseCodexChatResponse(std.testing.allocator, "<tool_call>{\"name\":\"shell\"}</tool_call>", "gpt-5.4"),
+    );
+}
+
+test "parseCodexChatResponse handles multiple function calls" {
+    var response = try parseCodexChatResponse(
+        std.testing.allocator,
+        "<tool_call>{\"id\":\"call_1\",\"name\":\"first\",\"arguments\":\"{}\"}</tool_call>" ++
+            "<tool_call>{\"id\":\"call_2\",\"name\":\"second\",\"arguments\":\"{\\\"n\\\":2}\"}</tool_call>",
+        "gpt-5.4",
+    );
+    defer response.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), response.tool_calls.len);
+    try std.testing.expectEqualStrings("call_1", response.tool_calls[0].id);
+    try std.testing.expectEqualStrings("call_2", response.tool_calls[1].id);
+    try std.testing.expectEqualStrings("second", response.tool_calls[1].name);
+    try std.testing.expectEqualStrings("{\"n\":2}", response.tool_calls[1].arguments);
 }
 
 test "buildSimpleCodexBody correct JSON" {
@@ -1266,19 +1540,35 @@ test "parseCodexSseEvent output_item.done message emits text delta" {
 
 test "parseCodexSseEvent output_item.done function_call emits xml tool call" {
     const line =
-        \\data: {"type":"response.output_item.done","item":{"type":"function_call","name":"screenshot","arguments":"{\"filename\":\"screenshot.png\"}"}}
+        \\data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_screenshot","name":"screenshot","arguments":"{\"filename\":\"screenshot.png\"}"}}
     ;
     const result = try parseCodexSseEvent(std.testing.allocator, line);
     switch (result) {
         .delta => |delta_evt| {
             defer std.testing.allocator.free(delta_evt.text);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "<tool_call>") != null);
+            try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "\"id\":\"call_screenshot\"") != null);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "\"name\":\"screenshot\"") != null);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "\"filename\":\"screenshot.png\"") != null);
             try std.testing.expect(delta_evt.source == .output_item_done);
         },
         else => return error.UnexpectedResult,
     }
+}
+
+test "OpenAiCodexProvider advertises native tool support" {
+    var codex = OpenAiCodexProvider{
+        .allocator = std.testing.allocator,
+        .access_token = null,
+        .refresh_token = null,
+        .account_id = null,
+        .expires_at = 0,
+    };
+    try std.testing.expect(!codex.log_exchange);
+    codex.setExchangeLogging(true);
+    try std.testing.expect(codex.log_exchange);
+    try std.testing.expect(codex.provider().supportsNativeTools());
+    try std.testing.expect(codex.provider().supportsNativeToolHistory());
 }
 
 test "parseCodexSseEvent response.completed extracts text from response output" {
@@ -1298,7 +1588,7 @@ test "parseCodexSseEvent response.completed extracts text from response output" 
 
 test "parseCodexSseEvent response.completed extracts function_call from response output" {
     const line =
-        \\data: {"type":"response.completed","response":{"output":[{"type":"function_call","name":"screenshot","arguments":"{\"filename\":\"a.png\"}"}]}}
+        \\data: {"type":"response.completed","response":{"output":[{"type":"reasoning","encrypted_content":"opaque"},{"type":"function_call","call_id":"call_screenshot","name":"screenshot","arguments":"{\"filename\":\"a.png\"}"}]}}
     ;
     const result = try parseCodexSseEvent(std.testing.allocator, line);
     switch (result) {
@@ -1306,6 +1596,7 @@ test "parseCodexSseEvent response.completed extracts function_call from response
             defer std.testing.allocator.free(delta_evt.text);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "<tool_call>") != null);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "\"name\":\"screenshot\"") != null);
+            try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "<codex_context>{\"type\":\"reasoning\",\"encrypted_content\":\"opaque\"}</codex_context>") != null);
             try std.testing.expect(std.mem.indexOf(u8, delta_evt.text, "\"filename\":\"a.png\"") != null);
             try std.testing.expect(delta_evt.source == .response_completed);
         },
@@ -1376,7 +1667,7 @@ test "buildCodexBody with explicit reasoning effort" {
     const messages = [_]ChatMessage{
         .{ .role = .user, .content = "Think hard" },
     };
-    const body = try buildCodexBody(std.testing.allocator, null, &messages, "o4-mini", "high");
+    const body = try buildCodexBody(std.testing.allocator, null, &messages, "o4-mini", "high", null);
     defer std.testing.allocator.free(body);
 
     try std.testing.expect(std.mem.indexOf(u8, body, "\"effort\":\"high\"") != null);

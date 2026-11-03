@@ -160,6 +160,12 @@ pub const ChatMessage = struct {
     name: ?[]const u8 = null,
     /// Tool call ID this message responds to.
     tool_call_id: ?[]const u8 = null,
+    /// Native function calls attached to an assistant message when the provider
+    /// needs the original structured call history for a follow-up request.
+    tool_calls: ?[]const ToolCall = null,
+    /// Provider-specific opaque response items needed to continue a stateless
+    /// conversation (for example, encrypted Responses API reasoning items).
+    provider_context: ?[]const u8 = null,
     /// Optional multimodal content parts (images, etc.). When set, providers
     /// serialize these instead of the plain `content` field.
     content_parts: ?[]const ContentPart = null,
@@ -205,6 +211,8 @@ pub const ChatResponse = struct {
     model: []const u8 = "",
     /// Optional reasoning/thinking content from models that support it (e.g. Claude extended thinking).
     reasoning_content: ?[]const u8 = null,
+    /// Opaque provider response context required for a follow-up tool request.
+    provider_context: ?[]const u8 = null,
 
     /// True when the LLM wants to invoke at least one tool.
     pub fn hasToolCalls(self: ChatResponse) bool {
@@ -219,6 +227,7 @@ pub const ChatResponse = struct {
     pub fn deinit(self: *ChatResponse, allocator: std.mem.Allocator) void {
         if (self.content) |c| allocator.free(c);
         if (self.reasoning_content) |rc| allocator.free(rc);
+        if (self.provider_context) |context| allocator.free(context);
         if (self.model.len > 0) allocator.free(self.model);
         if (self.provider.len > 0) allocator.free(self.provider);
         for (self.tool_calls) |tc| {
@@ -233,6 +242,7 @@ pub const ChatResponse = struct {
         self.provider = "";
         self.model = "";
         self.reasoning_content = null;
+        self.provider_context = null;
     }
 };
 
@@ -396,6 +406,8 @@ pub const Provider = struct {
 
         /// Whether this provider supports native tool calls.
         supportsNativeTools: *const fn (ptr: *anyopaque) bool,
+        /// Whether native tool history must be replayed as structured provider items.
+        supportsNativeToolHistory: ?*const fn (ptr: *anyopaque) bool = null,
 
         /// Provider name for diagnostics.
         getName: *const fn (ptr: *anyopaque) []const u8,
@@ -449,6 +461,11 @@ pub const Provider = struct {
 
     pub fn supportsNativeTools(self: Provider) bool {
         return self.vtable.supportsNativeTools(self.ptr);
+    }
+
+    pub fn supportsNativeToolHistory(self: Provider) bool {
+        if (self.vtable.supportsNativeToolHistory) |f| return f(self.ptr);
+        return false;
     }
 
     pub fn getName(self: Provider) []const u8 {

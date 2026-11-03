@@ -49,6 +49,17 @@ At minimum, run this before opening a PR for code changes:
 zig build test --summary all
 ```
 
+### Live Codex Native Tool Smoke Test
+
+The authenticated Codex smoke test stays outside the default suite. It uses the existing local `openai-codex` OAuth login and exposes only an in-memory echo tool:
+
+```bash
+zig build codex-live-build
+zig build codex-live-test
+```
+
+The test makes an authenticated request and fails if the provider does not return a structured function call, the tool is not invoked exactly once, the call result is not associated with its call ID, or the final reply omits the result. Its hardwired config enables request/response logging for diagnosis. The Authorization header is never logged; payloads can include prompt and response content. Normal provider instances keep this logging disabled. Run it only when a local Codex OAuth login is available.
+
 ## Common Build Flags
 
 ```bash
