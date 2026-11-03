@@ -4,7 +4,7 @@
 # Build natively on the runner architecture and cross-compile per TARGETARCH.
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS builder
 
-ARG ZIG_VERSION=0.16.0
+ARG ZIG_VERSION=0.17.0
 
 RUN apk add --no-cache bash curl git musl-dev python3
 
@@ -13,12 +13,13 @@ COPY .github/scripts/install-zig.sh .github/scripts/install-zig.sh
 COPY build.zig build.zig.zon ./
 COPY src/ src/
 COPY vendor/sqlite3/ vendor/sqlite3/
+COPY vendor/websocket/ vendor/websocket/
 
 RUN set -eu; \
     mkdir -p /tmp/zig-path; \
     GITHUB_PATH=/tmp/zig-path/path RUNNER_TEMP=/opt bash .github/scripts/install-zig.sh "${ZIG_VERSION}"; \
     ln -sf "$(cat /tmp/zig-path/path)/zig" /usr/local/bin/zig; \
-    test "$(zig version)" = "0.16.0"
+    test "$(zig version)" = "0.17.0"
 
 ARG TARGETARCH
 ARG VERSION=dev

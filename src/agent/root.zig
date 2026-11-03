@@ -2972,7 +2972,7 @@ pub const Agent = struct {
                 .string => |s| s,
                 else => "",
             };
-            if (std.ascii.indexOfIgnoreCase(content, "tools.md") != null) return true;
+            if (std.ascii.findIgnoreCase(content, "tools.md") != null) return true;
         }
 
         return false;
@@ -4728,7 +4728,7 @@ const RecordingObserver = struct {
     turn_complete_count: usize = 0,
     tokens_used_metric_total: u64 = 0,
     last_llm_response_total_tokens: ?u32 = null,
-    llm_request_message_counts: [8]usize = [_]usize{0} ** 8,
+    llm_request_message_counts: [8]usize = @splat(0),
     llm_request_message_counts_len: usize = 0,
     tool_call_count: usize = 0,
     last_tool_detail: [512]u8 = undefined,

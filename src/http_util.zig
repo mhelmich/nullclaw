@@ -852,7 +852,7 @@ pub fn httpRequestWithStatusAndHeaders(
     defer client.deinit();
 
     const redirect_behavior: std.http.Client.Request.RedirectBehavior =
-        if (body == null) @enumFromInt(3) else .unhandled;
+        if (body == null) @fromBackingInt(@intCast(3)) else .unhandled;
     var req = try client.client.request(method, uri, .{
         .redirect_behavior = redirect_behavior,
         .headers = .{ .accept_encoding = .default },
@@ -896,7 +896,7 @@ pub fn httpRequestWithStatusAndHeaders(
 
     const response_body = aw.writer.buffer[0..aw.writer.end];
     return .{
-        .status_code = @as(u16, @intFromEnum(response.head.status)),
+        .status_code = @as(u16, @backingInt(response.head.status)),
         .headers = response_headers,
         .body = try allocator.dupe(u8, response_body),
     };
@@ -1019,11 +1019,11 @@ fn fetchCurlMaxRedirects(options: std.http.Client.FetchOptions) ?u16 {
     const method = options.method orelse if (options.payload != null) std.http.Method.POST else .GET;
     if (method != .GET) return null;
     const redirect_behavior = options.redirect_behavior orelse
-        if (options.payload == null) @as(std.http.Client.Request.RedirectBehavior, @enumFromInt(3)) else .unhandled;
+        if (options.payload == null) @as(std.http.Client.Request.RedirectBehavior, @fromBackingInt(@intCast(3))) else .unhandled;
     if (redirect_behavior == .unhandled) return null;
     if (redirect_behavior == .not_allowed) return 0;
     if (fetchHasCallerHeaders(options)) return null;
-    return @intFromEnum(redirect_behavior);
+    return @backingInt(redirect_behavior);
 }
 
 pub const ProxyHttpClient = struct {
@@ -1120,7 +1120,7 @@ pub const ProxyHttpClient = struct {
         defer allocator.free(response.headers);
         defer allocator.free(response.body);
 
-        return .{ .status = @enumFromInt(@as(u10, @intCast(response.status_code))) };
+        return .{ .status = @fromBackingInt(@intCast(@as(u10, @intCast(response.status_code)))) };
     }
 };
 

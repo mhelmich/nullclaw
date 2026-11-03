@@ -120,9 +120,9 @@ nullclaw --help
 
 ### 2) Build from source
 
-> **Prerequisite:** use **Zig 0.16.0** (exact version).
+> **Prerequisite:** use **Zig 0.17.0** (exact version).
 > Other Zig versions are currently unsupported and may fail to build.
-> Verify before building: `zig version` should print `0.16.0`.
+> Verify before building: `zig version` should print `0.17.0`.
 > Debian users who need Zig first can follow [`docs/en/zig-installation.md`](docs/en/zig-installation.md).
 
 ```bash
@@ -853,7 +853,7 @@ See [Gateway API docs](docs/en/gateway-api.md) for full A2A reference including 
 
 ## Development
 
-Build and tests are pinned to **Zig 0.16.0**.
+Build and tests are pinned to **Zig 0.17.0**.
 
 ```bash
 zig build                          # Dev build
@@ -874,7 +874,7 @@ Channel CJM coverage (ingress parsing/filtering, session key routing, account pr
 ### Project Stats
 
 ```
-Language:     Zig 0.16.0
+Language:     Zig 0.17.0
 Source files: ~250
 Lines of code: ~249,000
 Tests:        5,300+

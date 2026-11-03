@@ -264,7 +264,7 @@ fn isLoopbackHost(host: []const u8) bool {
 
     if (std_compat.net.Address.parseIp6(normalized, 0)) |ip6| {
         const bytes = ip6.in6.sa.addr;
-        return std.mem.eql(u8, bytes[0..15], &[_]u8{0} ** 15) and bytes[15] == 1;
+        return std.mem.eql(u8, bytes[0..15], &@as([15]u8, @splat(0))) and bytes[15] == 1;
     } else |_| {}
 
     return false;
@@ -408,7 +408,7 @@ const ClickHouseMemoryImpl = struct {
 
         if (result.status != .ok) {
             const err_body = aw.writer.buffer[0..aw.writer.end];
-            log.err("ClickHouse error (HTTP {d}): {s}", .{ @intFromEnum(result.status), err_body });
+            log.err("ClickHouse error (HTTP {d}): {s}", .{ @backingInt(result.status), err_body });
             return error.ClickHouseQueryError;
         }
 
@@ -473,7 +473,7 @@ const ClickHouseMemoryImpl = struct {
 
         if (result.status != .ok) {
             const err_body = aw.writer.buffer[0..aw.writer.end];
-            log.err("ClickHouse mutation error (HTTP {d}): {s}", .{ @intFromEnum(result.status), err_body });
+            log.err("ClickHouse mutation error (HTTP {d}): {s}", .{ @backingInt(result.status), err_body });
             return error.ClickHouseQueryError;
         }
     }
@@ -1442,12 +1442,12 @@ test "validateIdentifier rejects empty" {
 }
 
 test "validateIdentifier rejects too long" {
-    const long = "a" ** 64;
+    const long = &@import("../../util/repeat.zig").repeat("a", 64);
     try std.testing.expectError(error.IdentifierTooLong, validateIdentifier(long));
 }
 
 test "validateIdentifier accepts max length 63" {
-    const ok = "a" ** 63;
+    const ok = &@import("../../util/repeat.zig").repeat("a", 63);
     try validateIdentifier(ok);
 }
 

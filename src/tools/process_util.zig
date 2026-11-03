@@ -214,7 +214,7 @@ fn wasInterrupted(cancel_flag: ?*const AtomicBool) bool {
 }
 
 fn processExists(pid: std.posix.pid_t) bool {
-    std.posix.kill(pid, @as(std.posix.SIG, @enumFromInt(0))) catch |err| switch (err) {
+    std.posix.kill(pid, @as(std.posix.SIG, @fromBackingInt(@intCast(0)))) catch |err| switch (err) {
         error.ProcessNotFound => return false,
         else => return true,
     };

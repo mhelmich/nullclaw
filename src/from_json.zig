@@ -263,7 +263,7 @@ fn applyProvidersFromArray(cfg: *Config, items: []const std.json.Value) !void {
 }
 
 fn channelSupportsAccounts(channel_type: []const u8) bool {
-    inline for (std.meta.fields(config_mod.ChannelsConfig)) |field| {
+    inline for (@import("meta_compat.zig").fields(config_mod.ChannelsConfig)) |field| {
         if (std.mem.eql(u8, channel_type, field.name)) {
             return switch (@typeInfo(field.type)) {
                 .pointer => |ptr| ptr.size == .slice,
@@ -275,7 +275,7 @@ fn channelSupportsAccounts(channel_type: []const u8) bool {
 }
 
 fn channelExistsInConfig(channel_type: []const u8) bool {
-    inline for (std.meta.fields(config_mod.ChannelsConfig)) |field| {
+    inline for (@import("meta_compat.zig").fields(config_mod.ChannelsConfig)) |field| {
         if (std.mem.eql(u8, channel_type, field.name)) return true;
     }
     return false;

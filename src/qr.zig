@@ -621,7 +621,7 @@ test "encode medium URL selects appropriate version" {
 }
 
 test "encode returns error for data too long" {
-    const long = "A" ** 200;
+    const long = &@import("util/repeat.zig").repeat("A", 200);
     try testing.expectError(error.DataTooLong, encode(long));
 }
 

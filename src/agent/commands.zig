@@ -339,7 +339,7 @@ fn renderInteractiveProviderMenuFromProviders(
     var option_id_bufs: [interaction_choices.MAX_OPTIONS][interaction_choices.MAX_ID_LEN]u8 = undefined;
     var submit_text_bufs: [interaction_choices.MAX_OPTIONS][interaction_choices.MAX_SUBMIT_TEXT_LEN]u8 = undefined;
     var option_count: usize = 0;
-    var labels_to_free: [interaction_choices.MAX_OPTIONS]?[]u8 = .{null} ** interaction_choices.MAX_OPTIONS;
+    var labels_to_free: [interaction_choices.MAX_OPTIONS]?[]u8 = @splat(null);
     defer {
         for (labels_to_free) |label_opt| {
             if (label_opt) |label| allocator.free(label);
@@ -405,7 +405,7 @@ fn renderInteractiveModelMenuFromModels(
     var option_id_bufs: [interaction_choices.MAX_OPTIONS][interaction_choices.MAX_ID_LEN]u8 = undefined;
     var submit_text_bufs: [interaction_choices.MAX_OPTIONS][interaction_choices.MAX_SUBMIT_TEXT_LEN]u8 = undefined;
     var option_count: usize = 0;
-    var labels_to_free: [interaction_choices.MAX_OPTIONS]?[]u8 = .{null} ** interaction_choices.MAX_OPTIONS;
+    var labels_to_free: [interaction_choices.MAX_OPTIONS]?[]u8 = @splat(null);
     defer {
         for (labels_to_free) |label_opt| {
             if (label_opt) |label| allocator.free(label);
@@ -2555,7 +2555,7 @@ fn formatSkillLetterGroupMenu(
         return try self.allocator.dupe(u8, "Letter menus are optimized for Telegram. Use /skills there to browse interactively.");
     }
 
-    var present: [26]bool = [_]bool{false} ** 26;
+    var present: [26]bool = @splat(false);
     for (refs) |skill| {
         if (firstSkillBrowseLetter(skill.name)) |letter| {
             if (skillLetterInGroup(letter, group)) present[letter - 'a'] = true;

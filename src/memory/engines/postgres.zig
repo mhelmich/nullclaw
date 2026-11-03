@@ -12,9 +12,7 @@ const MemoryCategory = root.MemoryCategory;
 const MemoryEntry = root.MemoryEntry;
 const SessionStore = root.SessionStore;
 
-const c = if (build_options.enable_postgres) @cImport({
-    @cInclude("libpq-fe.h");
-}) else struct {};
+const c = if (build_options.enable_postgres) @import("postgres_c") else struct {};
 
 // ── SQL injection protection ──────────────────────────────────────
 
@@ -477,26 +475,26 @@ const PostgresMemoryImpl = struct {
 
         const now = getNowTimestamp(self_.allocator) catch return error.StepFailed;
         defer self_.allocator.free(now);
-        const now_z = try self_.allocator.dupeZ(u8, now);
+        const now_z = try self_.allocator.dupeSentinel(u8, now, 0);
         defer self_.allocator.free(now_z);
 
         const id = generateId(self_.allocator) catch return error.StepFailed;
         defer self_.allocator.free(id);
-        const id_z = try self_.allocator.dupeZ(u8, id);
+        const id_z = try self_.allocator.dupeSentinel(u8, id, 0);
         defer self_.allocator.free(id_z);
 
         const cat_str = category.toString();
-        const key_z = try self_.allocator.dupeZ(u8, key);
+        const key_z = try self_.allocator.dupeSentinel(u8, key, 0);
         defer self_.allocator.free(key_z);
-        const content_z = try self_.allocator.dupeZ(u8, content);
+        const content_z = try self_.allocator.dupeSentinel(u8, content, 0);
         defer self_.allocator.free(content_z);
-        const cat_z = try self_.allocator.dupeZ(u8, cat_str);
+        const cat_z = try self_.allocator.dupeSentinel(u8, cat_str, 0);
         defer self_.allocator.free(cat_z);
 
-        const sid_z: ?[*:0]u8 = if (session_id) |sid| try self_.allocator.dupeZ(u8, sid) else null;
+        const sid_z: ?[*:0]u8 = if (session_id) |sid| try self_.allocator.dupeSentinel(u8, sid, 0) else null;
         defer if (sid_z) |s| self_.allocator.free(std.mem.span(s));
 
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{
@@ -535,14 +533,14 @@ const PostgresMemoryImpl = struct {
         defer allocator.free(pattern);
 
         var limit_buf: [20]u8 = undefined;
-        const limit_str = try std.fmt.bufPrintZ(&limit_buf, "{d}", .{limit});
+        const limit_str = try std.fmt.bufPrintSentinel(&limit_buf, "{d}", .{limit}, 0);
 
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
 
         var result: *c.PGresult = undefined;
         if (session_id) |sid| {
-            const sid_z = try allocator.dupeZ(u8, sid);
+            const sid_z = try allocator.dupeSentinel(u8, sid, 0);
             defer allocator.free(sid_z);
             const params = [_]?[*:0]const u8{ pattern.ptr, limit_str.ptr, sid_z, iid_z };
             const lengths = [_]c_int{ @intCast(pattern.len - 1), @intCast(std.mem.len(limit_str)), @intCast(sid.len), @intCast(self_.instance_id.len) };
@@ -579,9 +577,9 @@ const PostgresMemoryImpl = struct {
     fn implGet(ptr: *anyopaque, allocator: std.mem.Allocator, key: []const u8) anyerror!?MemoryEntry {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const key_z = try allocator.dupeZ(u8, key);
+        const key_z = try allocator.dupeSentinel(u8, key, 0);
         defer allocator.free(key_z);
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ key_z, iid_z };
@@ -597,16 +595,16 @@ const PostgresMemoryImpl = struct {
     fn implList(ptr: *anyopaque, allocator: std.mem.Allocator, category: ?MemoryCategory, session_id: ?[]const u8) anyerror![]MemoryEntry {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
 
         var result: *c.PGresult = undefined;
         if (category) |cat| {
             const cat_str = cat.toString();
-            const cat_z = try allocator.dupeZ(u8, cat_str);
+            const cat_z = try allocator.dupeSentinel(u8, cat_str, 0);
             defer allocator.free(cat_z);
             if (session_id) |sid| {
-                const sid_z = try allocator.dupeZ(u8, sid);
+                const sid_z = try allocator.dupeSentinel(u8, sid, 0);
                 defer allocator.free(sid_z);
                 const params = [_]?[*:0]const u8{ cat_z, sid_z, iid_z };
                 const lengths = [_]c_int{ @intCast(cat_str.len), @intCast(sid.len), @intCast(self_.instance_id.len) };
@@ -617,7 +615,7 @@ const PostgresMemoryImpl = struct {
                 result = try self_.execParams(self_.q_list_cat, &params, &lengths);
             }
         } else if (session_id) |sid| {
-            const sid_z = try allocator.dupeZ(u8, sid);
+            const sid_z = try allocator.dupeSentinel(u8, sid, 0);
             defer allocator.free(sid_z);
             const params = [_]?[*:0]const u8{ sid_z, iid_z };
             const lengths = [_]c_int{ @intCast(sid.len), @intCast(self_.instance_id.len) };
@@ -660,21 +658,21 @@ const PostgresMemoryImpl = struct {
         const query = try buildQuery(allocator, template, self_.schema_q, self_.table_q);
         defer allocator.free(query);
 
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
 
         var limit_buf: [20]u8 = undefined;
-        const limit_str = try std.fmt.bufPrintZ(&limit_buf, "{d}", .{limit});
+        const limit_str = try std.fmt.bufPrintSentinel(&limit_buf, "{d}", .{limit}, 0);
         var offset_buf: [20]u8 = undefined;
-        const offset_str = try std.fmt.bufPrintZ(&offset_buf, "{d}", .{offset});
+        const offset_str = try std.fmt.bufPrintSentinel(&offset_buf, "{d}", .{offset}, 0);
 
         var result: *c.PGresult = undefined;
         if (category) |cat| {
             const cat_str = cat.toString();
-            const cat_z = try allocator.dupeZ(u8, cat_str);
+            const cat_z = try allocator.dupeSentinel(u8, cat_str, 0);
             defer allocator.free(cat_z);
             if (session_id) |sid| {
-                const sid_z = try allocator.dupeZ(u8, sid);
+                const sid_z = try allocator.dupeSentinel(u8, sid, 0);
                 defer allocator.free(sid_z);
                 const params = [_]?[*:0]const u8{ cat_z, sid_z, iid_z, limit_str.ptr, offset_str.ptr };
                 const lengths = [_]c_int{
@@ -696,7 +694,7 @@ const PostgresMemoryImpl = struct {
                 result = try self_.execParams(query, &params, &lengths);
             }
         } else if (session_id) |sid| {
-            const sid_z = try allocator.dupeZ(u8, sid);
+            const sid_z = try allocator.dupeSentinel(u8, sid, 0);
             defer allocator.free(sid_z);
             const params = [_]?[*:0]const u8{ sid_z, iid_z, limit_str.ptr, offset_str.ptr };
             const lengths = [_]c_int{
@@ -736,9 +734,9 @@ const PostgresMemoryImpl = struct {
     fn implForget(ptr: *anyopaque, key: []const u8) anyerror!bool {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const key_z = try self_.allocator.dupeZ(u8, key);
+        const key_z = try self_.allocator.dupeSentinel(u8, key, 0);
         defer self_.allocator.free(key_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ key_z, iid_z };
@@ -756,7 +754,7 @@ const PostgresMemoryImpl = struct {
     fn implCount(ptr: *anyopaque) anyerror!usize {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
         const params = [_]?[*:0]const u8{iid_z};
         const lengths = [_]c_int{@intCast(self_.instance_id.len)};
@@ -808,13 +806,13 @@ const PostgresMemoryImpl = struct {
     fn implSessionSaveMessage(ptr: *anyopaque, session_id: []const u8, role: []const u8, content: []const u8) anyerror!void {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try self_.allocator.dupeZ(u8, session_id);
+        const sid_z = try self_.allocator.dupeSentinel(u8, session_id, 0);
         defer self_.allocator.free(sid_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
-        const role_z = try self_.allocator.dupeZ(u8, role);
+        const role_z = try self_.allocator.dupeSentinel(u8, role, 0);
         defer self_.allocator.free(role_z);
-        const content_z = try self_.allocator.dupeZ(u8, content);
+        const content_z = try self_.allocator.dupeSentinel(u8, content, 0);
         defer self_.allocator.free(content_z);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z, role_z, content_z };
@@ -832,9 +830,9 @@ const PostgresMemoryImpl = struct {
     fn implSessionLoadMessages(ptr: *anyopaque, allocator: std.mem.Allocator, session_id: []const u8) anyerror![]root.MessageEntry {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try allocator.dupeZ(u8, session_id);
+        const sid_z = try allocator.dupeSentinel(u8, session_id, 0);
         defer allocator.free(sid_z);
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z };
@@ -870,9 +868,9 @@ const PostgresMemoryImpl = struct {
     fn implSessionClearMessages(ptr: *anyopaque, session_id: []const u8) anyerror!void {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try self_.allocator.dupeZ(u8, session_id);
+        const sid_z = try self_.allocator.dupeSentinel(u8, session_id, 0);
         defer self_.allocator.free(sid_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z };
@@ -888,11 +886,11 @@ const PostgresMemoryImpl = struct {
     fn implSessionClearAutoSaved(ptr: *anyopaque, session_id: ?[]const u8) anyerror!void {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         if (session_id) |sid| {
-            const sid_z = try self_.allocator.dupeZ(u8, sid);
+            const sid_z = try self_.allocator.dupeSentinel(u8, sid, 0);
             defer self_.allocator.free(sid_z);
             const params = [_]?[*:0]const u8{ sid_z, iid_z };
             const lengths = [_]c_int{ @intCast(sid.len), @intCast(self_.instance_id.len) };
@@ -909,9 +907,9 @@ const PostgresMemoryImpl = struct {
     fn implSessionSaveUsage(ptr: *anyopaque, session_id: []const u8, total_tokens: u64) anyerror!void {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try self_.allocator.dupeZ(u8, session_id);
+        const sid_z = try self_.allocator.dupeSentinel(u8, session_id, 0);
         defer self_.allocator.free(sid_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const total_z = try std.fmt.allocPrintZ(self_.allocator, "{d}", .{total_tokens});
@@ -926,9 +924,9 @@ const PostgresMemoryImpl = struct {
     fn implSessionLoadUsage(ptr: *anyopaque, session_id: []const u8) anyerror!?u64 {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try self_.allocator.dupeZ(u8, session_id);
+        const sid_z = try self_.allocator.dupeSentinel(u8, session_id, 0);
         defer self_.allocator.free(sid_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z };
@@ -946,7 +944,7 @@ const PostgresMemoryImpl = struct {
     fn implSessionCountSessions(ptr: *anyopaque) anyerror!u64 {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
         const params = [_]?[*:0]const u8{iid_z};
         const lengths = [_]c_int{@intCast(self_.instance_id.len)};
@@ -963,12 +961,12 @@ const PostgresMemoryImpl = struct {
     fn implSessionListSessions(ptr: *anyopaque, allocator: std.mem.Allocator, limit: usize, offset: usize) anyerror![]root.SessionInfo {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
         var limit_buf: [20]u8 = undefined;
-        const limit_str = try std.fmt.bufPrintZ(&limit_buf, "{d}", .{limit});
+        const limit_str = try std.fmt.bufPrintSentinel(&limit_buf, "{d}", .{limit}, 0);
         var offset_buf: [20]u8 = undefined;
-        const offset_str = try std.fmt.bufPrintZ(&offset_buf, "{d}", .{offset});
+        const offset_str = try std.fmt.bufPrintSentinel(&offset_buf, "{d}", .{offset}, 0);
 
         const params = [_]?[*:0]const u8{ iid_z, limit_str.ptr, offset_str.ptr };
         const lengths = [_]c_int{ @intCast(self_.instance_id.len), @intCast(std.mem.len(limit_str)), @intCast(std.mem.len(offset_str)) };
@@ -1009,9 +1007,9 @@ const PostgresMemoryImpl = struct {
     fn implSessionCountDetailedMessages(ptr: *anyopaque, session_id: []const u8) anyerror!u64 {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try self_.allocator.dupeZ(u8, session_id);
+        const sid_z = try self_.allocator.dupeSentinel(u8, session_id, 0);
         defer self_.allocator.free(sid_z);
-        const iid_z = try self_.allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try self_.allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer self_.allocator.free(iid_z);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z };
@@ -1029,14 +1027,14 @@ const PostgresMemoryImpl = struct {
     fn implSessionLoadMessagesDetailed(ptr: *anyopaque, allocator: std.mem.Allocator, session_id: []const u8, limit: usize, offset: usize) anyerror![]root.DetailedMessageEntry {
         const self_: *Self = @ptrCast(@alignCast(ptr));
 
-        const sid_z = try allocator.dupeZ(u8, session_id);
+        const sid_z = try allocator.dupeSentinel(u8, session_id, 0);
         defer allocator.free(sid_z);
-        const iid_z = try allocator.dupeZ(u8, self_.instance_id);
+        const iid_z = try allocator.dupeSentinel(u8, self_.instance_id, 0);
         defer allocator.free(iid_z);
         var limit_buf: [20]u8 = undefined;
-        const limit_str = try std.fmt.bufPrintZ(&limit_buf, "{d}", .{limit});
+        const limit_str = try std.fmt.bufPrintSentinel(&limit_buf, "{d}", .{limit}, 0);
         var offset_buf: [20]u8 = undefined;
-        const offset_str = try std.fmt.bufPrintZ(&offset_buf, "{d}", .{offset});
+        const offset_str = try std.fmt.bufPrintSentinel(&offset_buf, "{d}", .{offset}, 0);
 
         const params = [_]?[*:0]const u8{ sid_z, iid_z, limit_str.ptr, offset_str.ptr };
         const lengths = [_]c_int{
@@ -1112,7 +1110,7 @@ test "validateIdentifier rejects empty" {
 }
 
 test "validateIdentifier rejects too long" {
-    const long = "a" ** 64;
+    const long = &@import("../../util/repeat.zig").repeat("a", 64);
     try std.testing.expectError(error.IdentifierTooLong, validateIdentifier(long));
 }
 
@@ -1125,7 +1123,7 @@ test "validateIdentifier rejects special chars" {
 }
 
 test "validateIdentifier accepts max length 63" {
-    const ok = "a" ** 63;
+    const ok = &@import("../../util/repeat.zig").repeat("a", 63);
     try validateIdentifier(ok);
 }
 

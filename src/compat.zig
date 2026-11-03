@@ -82,7 +82,6 @@ pub const process = struct {
             env_map: ?*const EnvMap = null,
             expand_arg0: std.process.ArgExpansion = .no_expand,
             create_no_window: bool = true,
-            disable_aslr: bool = false,
         };
 
         pub fn init(argv: []const []const u8, allocator: Allocator) Child {
@@ -181,7 +180,6 @@ pub const process = struct {
                 .environ_map = options.env_map,
                 .expand_arg0 = options.expand_arg0,
                 .create_no_window = options.create_no_window,
-                .disable_aslr = options.disable_aslr,
             });
         }
     };

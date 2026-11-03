@@ -360,7 +360,7 @@ pub const Config = struct {
     }
 
     fn isReservedRuntimeChannelName(runtime_name: []const u8) bool {
-        inline for (std.meta.fields(config_types.ChannelsConfig)) |field| {
+        inline for (@import("meta_compat.zig").fields(config_types.ChannelsConfig)) |field| {
             if (std.mem.eql(u8, field.name, runtime_name)) return true;
         }
         return false;
@@ -735,7 +735,7 @@ pub const Config = struct {
             wrote_any = true;
         }
 
-        inline for (std.meta.fields(ChannelsConfig)) |field| {
+        inline for (@import("meta_compat.zig").fields(ChannelsConfig)) |field| {
             if (comptime std.mem.eql(u8, field.name, "cli")) continue;
             if (comptime std.mem.eql(u8, field.name, "nostr")) continue;
 
@@ -4545,9 +4545,7 @@ test "save roundtrip preserves tools customization schema" {
 
 test "load merges relative tool_customizations_file with inline customizations" {
     if (comptime builtin.os.tag == .windows) return error.SkipZigTest;
-    const c = @cImport({
-        @cInclude("stdlib.h");
-    });
+    const c = @import("posix_env");
 
     const allocator = std.testing.allocator;
     var tmp = std.testing.tmpDir(.{});
@@ -4576,9 +4574,9 @@ test "load merges relative tool_customizations_file with inline customizations" 
 
     const home = try tmp_dir.realpathAlloc(allocator, "home");
     defer allocator.free(home);
-    const key_z = try allocator.dupeZ(u8, "NULLCLAW_HOME");
+    const key_z = try allocator.dupeSentinel(u8, "NULLCLAW_HOME", 0);
     defer allocator.free(key_z);
-    const home_z = try allocator.dupeZ(u8, home);
+    const home_z = try allocator.dupeSentinel(u8, home, 0);
     defer allocator.free(home_z);
     try std.testing.expectEqual(@as(c_int, 0), c.setenv(key_z.ptr, home_z.ptr, 1));
     defer _ = c.unsetenv(key_z.ptr);
@@ -7965,7 +7963,7 @@ test "save includes nostr channel when configured" {
         .allocator = allocator,
     };
 
-    const owner_pubkey = "a" ** 64;
+    const owner_pubkey = &@import("util/repeat.zig").repeat("a", 64);
     var ns_cfg = NostrConfig{
         .private_key = "enc2:abc",
         .owner_pubkey = owner_pubkey,
@@ -8012,7 +8010,7 @@ test "save includes dm_relays in nostr section" {
     };
     var ns_cfg = config_types.NostrConfig{
         .private_key = "enc2:abc",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("util/repeat.zig").repeat("a", 64),
         .dm_relays = &.{ "wss://auth.nostr1.com", "wss://relay.damus.io" },
     };
     cfg.channels.nostr = &ns_cfg;
@@ -8041,7 +8039,7 @@ test "dm_relays round-trips through save and load" {
     };
     var ns_cfg = config_types.NostrConfig{
         .private_key = "enc2:abc",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("util/repeat.zig").repeat("a", 64),
         .dm_relays = &.{ "wss://auth.nostr1.com", "wss://relay.damus.io" },
     };
     cfg.channels.nostr = &ns_cfg;
@@ -8081,7 +8079,7 @@ test "nostr display_name with special chars round-trips correctly" {
     };
     var ns_cfg = config_types.NostrConfig{
         .private_key = "enc2:abc",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("util/repeat.zig").repeat("a", 64),
         .display_name = "Bot \"NullClaw\" v1",
         .about = "Line1\nLine2",
     };
@@ -8198,7 +8196,7 @@ test "parse nostr channel missing required fields yields null" {
 test "NostrConfig dm_relays default is auth.nostr1.com" {
     const cfg = config_types.NostrConfig{
         .private_key = "enc2:x",
-        .owner_pubkey = "a" ** 64,
+        .owner_pubkey = &@import("util/repeat.zig").repeat("a", 64),
     };
     try std.testing.expectEqual(@as(usize, 1), cfg.dm_relays.len);
     try std.testing.expectEqualStrings("wss://auth.nostr1.com", cfg.dm_relays[0]);

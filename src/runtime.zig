@@ -5,9 +5,7 @@ const build_options = @import("build_options");
 const fs_compat = @import("fs_compat.zig");
 const embedded_wasm3_available = build_options.enable_embedded_wasm3;
 
-const c_wasm3 = if (embedded_wasm3_available) @cImport({
-    @cInclude("wasm3.h");
-}) else struct {};
+const c_wasm3 = if (embedded_wasm3_available) @import("wasm3_c") else struct {};
 
 /// Runtime adapter interface -- abstracts platform differences.
 /// Mirrors ZeroClaw's RuntimeAdapter trait.
@@ -601,8 +599,8 @@ fn realpathIfExecutable(allocator: std.mem.Allocator, path: []const u8) !?[]u8 {
 }
 
 fn supportedWindowsProgramExtension(ext: []const u8) bool {
-    inline for (@typeInfo(std_compat.process.Child.WindowsExtension).@"enum".fields) |field| {
-        if (std.ascii.eqlIgnoreCase(ext, "." ++ field.name)) return true;
+    inline for (@typeInfo(std_compat.process.Child.WindowsExtension).@"enum".field_names) |field| {
+        if (std.ascii.eqlIgnoreCase(ext, "." ++ field)) return true;
     }
     return false;
 }

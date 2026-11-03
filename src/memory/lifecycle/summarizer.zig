@@ -201,8 +201,8 @@ pub fn parseSummaryResponse(
 
 test "shouldSummarize returns false when disabled" {
     const messages = [_]MessageEntry{
-        .{ .role = "user", .content = "a" ** 20000 },
-        .{ .role = "assistant", .content = "b" ** 20000 },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("a", 20000) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("b", 20000) },
     };
     const config = SummarizerConfig{ .enabled = false, .window_size_tokens = 10 };
     try std.testing.expect(!shouldSummarize(&messages, config));
@@ -215,7 +215,7 @@ test "shouldSummarize returns false for empty messages" {
 
 test "shouldSummarize returns false for single message" {
     const messages = [_]MessageEntry{
-        .{ .role = "user", .content = "a" ** 20000 },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("a", 20000) },
     };
     const config = SummarizerConfig{ .enabled = true, .window_size_tokens = 10 };
     try std.testing.expect(!shouldSummarize(&messages, config));
@@ -234,8 +234,8 @@ test "shouldSummarize returns false below window" {
 test "shouldSummarize returns true above window" {
     // Each message ~5000 tokens → total ~10000, window is 4000
     const messages = [_]MessageEntry{
-        .{ .role = "user", .content = "a" ** 20000 },
-        .{ .role = "assistant", .content = "b" ** 20000 },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("a", 20000) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("b", 20000) },
     };
     const config = SummarizerConfig{ .enabled = true, .window_size_tokens = 4000 };
     try std.testing.expect(shouldSummarize(&messages, config));
@@ -260,10 +260,10 @@ test "partitionMessages splits at window boundary" {
     // 4 messages, each ~2500+3 tokens (10000 chars / 4 + role + separator)
     // window = 5100 fits 2 messages (~2503 * 2 = 5006 < 5100)
     const messages = [_]MessageEntry{
-        .{ .role = "user", .content = "a" ** 10000 },
-        .{ .role = "assistant", .content = "b" ** 10000 },
-        .{ .role = "user", .content = "c" ** 10000 },
-        .{ .role = "assistant", .content = "d" ** 10000 },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("a", 10000) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("b", 10000) },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("c", 10000) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("d", 10000) },
     };
     const config = SummarizerConfig{ .window_size_tokens = 5100 };
     const p = partitionMessages(&messages, config);
@@ -400,11 +400,11 @@ test "R3: parseSummaryResponse skips empty key facts" {
 
 test "R3: partitionMessages preserves invariant — summarize + keep == total" {
     const messages = [_]MessageEntry{
-        .{ .role = "user", .content = "a" ** 100 },
-        .{ .role = "assistant", .content = "b" ** 100 },
-        .{ .role = "user", .content = "c" ** 100 },
-        .{ .role = "assistant", .content = "d" ** 100 },
-        .{ .role = "user", .content = "e" ** 100 },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("a", 100) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("b", 100) },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("c", 100) },
+        .{ .role = "assistant", .content = &@import("../../util/repeat.zig").repeat("d", 100) },
+        .{ .role = "user", .content = &@import("../../util/repeat.zig").repeat("e", 100) },
     };
 
     // Test with various window sizes

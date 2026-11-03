@@ -297,7 +297,7 @@ test "appendDraftChunk stays quiet while suppressed" {
 }
 
 test "buildTransportText compacts long draft into progress preview" {
-    const long_text = "abcdef" ** 700;
+    const long_text = &@import("../util/repeat.zig").repeat("abcdef", 700);
     const compact = try buildTransportText(std.testing.allocator, long_text, 1_000, 16_000);
     defer std.testing.allocator.free(compact);
 
@@ -308,7 +308,7 @@ test "buildTransportText compacts long draft into progress preview" {
 }
 
 test "buildTransportText strips think blocks from compact excerpt" {
-    const long_text = ("a" ** 2900) ++ "<think>private</think>" ++ ("b" ** 400);
+    const long_text = (&@import("../util/repeat.zig").repeat("a", 2900)) ++ "<think>private</think>" ++ (&@import("../util/repeat.zig").repeat("b", 400));
     const compact = try buildTransportText(std.testing.allocator, long_text, 1_000, 16_000);
     defer std.testing.allocator.free(compact);
 

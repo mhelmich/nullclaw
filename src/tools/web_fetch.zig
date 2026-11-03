@@ -704,7 +704,7 @@ test "parseMaxChars" {
 
 test "formatExtractedText keeps UTF-8 intact when truncating" {
     const allocator = std.testing.allocator;
-    const prefix = "a" ** 99;
+    const prefix = &@import("../util/repeat.zig").repeat("a", 99);
     const formatted = try formatExtractedText(allocator, prefix ++ "\xd0\x99tail", 100);
     defer allocator.free(formatted);
 

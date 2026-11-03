@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const TranslateC = @import("translate_c").Translator;
 
 const VendoredFileHash = struct {
     path: []const u8,
@@ -47,11 +48,8 @@ fn readFileAllocCompat(dir: std.Io.Dir, io: std.Io, allocator: std.mem.Allocator
 fn verifyVendoredSqliteHashes(b: *std.Build) !void {
     const max_vendor_file_size = 16 * 1024 * 1024;
     for (VENDORED_SQLITE_HASHES) |entry| {
-        const file_path = b.pathFromRoot(entry.path);
-        defer b.allocator.free(file_path);
-
-        const bytes = readFileAllocCompat(std.Io.Dir.cwd(), b.graph.io, b.allocator, file_path, max_vendor_file_size) catch |err| {
-            std.log.err("failed to read {s}: {s}", .{ file_path, @errorName(err) });
+        const bytes = readFileAllocCompat(std.Io.Dir.cwd(), b.graph.io, b.allocator, entry.path, max_vendor_file_size) catch |err| {
+            std.log.err("failed to read {s}: {s}", .{ entry.path, @errorName(err) });
             return err;
         };
         defer b.allocator.free(bytes);
@@ -347,7 +345,7 @@ fn envExists(b: *std.Build, name: []const u8) bool {
 
 fn ensureAndroidBuildEnvironment(b: *std.Build) void {
     if (envExists(b, "TERMUX_VERSION")) return;
-    if (b.libc_file != null) return;
+    if (envExists(b, "ZIG_LIBC")) return;
 
     const has_android_sdk_or_ndk =
         envExists(b, "ANDROID_NDK_HOME") or
@@ -362,7 +360,7 @@ fn ensureAndroidBuildEnvironment(b: *std.Build) void {
         std.log.err("Install the Android NDK, generate a libc/sysroot file for the target, and pass it with --libc.", .{});
     }
     std.log.err("For native builds, run the build inside Termux without -Dtarget.", .{});
-    std.log.err("If you are seeing a build.zig.zon parse error mentioning '.nullclaw', your Zig version is not 0.16.0.", .{});
+    std.log.err("If you are seeing a build.zig.zon parse error mentioning '.nullclaw', use the pinned Zig 0.17.0 toolchain.", .{});
     std.process.exit(1);
 }
 
@@ -450,6 +448,36 @@ pub fn build(b: *std.Build) void {
     const effective_enable_memory_lucid = enable_sqlite and enable_memory_lucid;
     const effective_enable_memory_lancedb = enable_sqlite and enable_memory_lancedb;
 
+    const translate_c_dep = b.dependency("translate_c", .{});
+    const sqlite_c = TranslateC.init(translate_c_dep, .{
+        .name = "sqlite_c",
+        .c_source_file = b.addWriteFiles().add("sqlite_c.h", "#include <sqlite3.h>\n"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sqlite_c.addIncludePath(b.path("vendor/sqlite3"));
+    const wasm3_c = if (enable_embedded_wasm3) blk: {
+        const wasm3_dep = b.dependency("wasm3", .{ .target = target, .optimize = optimize });
+        const translator = TranslateC.init(translate_c_dep, .{
+            .name = "wasm3_c",
+            .c_source_file = b.addWriteFiles().add("wasm3_c.h", "#include <wasm3.h>\n"),
+            .target = target,
+            .optimize = optimize,
+        });
+        translator.addIncludePath(wasm3_dep.path("source"));
+        break :blk translator.mod;
+    } else null;
+    const postgres_c = if (enable_postgres) blk: {
+        const translator = TranslateC.init(translate_c_dep, .{
+            .name = "postgres_c",
+            .c_source_file = b.addWriteFiles().add("postgres_c.h", "#include <libpq-fe.h>\n"),
+            .target = target,
+            .optimize = optimize,
+            .link_system_libs = &.{.{ .name = "pq" }},
+        });
+        break :blk translator.mod;
+    } else null;
+
     if (enable_sqlite) {
         verifyVendoredSqliteHashes(b) catch {
             std.log.err("vendored sqlite integrity check failed", .{});
@@ -521,6 +549,10 @@ pub fn build(b: *std.Build) void {
         });
         module.addImport("build_options", build_options_module);
         module.addImport("compat", compat_module);
+        module.addImport("posix_env", b.createModule(.{ .root_source_file = b.path("src/posix_env.zig"), .target = target, .optimize = optimize }));
+        module.addImport("sqlite_c", sqlite_c.mod);
+        if (wasm3_c) |wasm| module.addImport("wasm3_c", wasm);
+        if (postgres_c) |pg| module.addImport("postgres_c", pg);
         if (sqlite3) |lib| {
             module.linkLibrary(lib);
         }
@@ -571,6 +603,10 @@ pub fn build(b: *std.Build) void {
             .root_module = exe_root_module,
         });
     exe.root_module.addImport("build_options", build_options_module);
+    exe.root_module.addImport("posix_env", b.createModule(.{ .root_source_file = b.path("src/posix_env.zig"), .target = target, .optimize = optimize }));
+    exe.root_module.addImport("sqlite_c", sqlite_c.mod);
+    if (wasm3_c) |wasm| exe.root_module.addImport("wasm3_c", wasm);
+    if (postgres_c) |pg| exe.root_module.addImport("postgres_c", pg);
 
     // Link SQLite on the compile step (not the module)
     if (!is_wasi) {
@@ -586,7 +622,7 @@ pub fn build(b: *std.Build) void {
     }
     exe.dead_strip_dylibs = true;
 
-    if (optimize != .Debug) {
+    if (optimize != .debug) {
         exe.root_module.strip = true;
         exe.root_module.unwind_tables = .none;
         exe.root_module.omit_frame_pointer = true;
@@ -596,7 +632,7 @@ pub fn build(b: *std.Build) void {
 
     // macOS host+target only: strip local symbols post-install.
     // Host `strip` cannot process ELF/PE during cross-builds.
-    if (optimize != .Debug and builtin.os.tag == .macos and target.result.os.tag == .macos) {
+    if (optimize != .debug and builtin.os.tag == .macos and target.result.os.tag == .macos) {
         const strip_cmd = b.addSystemCommand(&.{"strip"});
         strip_cmd.addArgs(&.{"-x"});
         strip_cmd.addFileArg(exe.getEmittedBin());
@@ -609,9 +645,6 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
 
     // ---------- tests ----------
     const test_step = b.step("test", "Run all tests");

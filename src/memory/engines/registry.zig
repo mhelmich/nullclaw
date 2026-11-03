@@ -298,7 +298,7 @@ pub fn resolvePaths(
     else if (database_path.len == 0)
         try std_compat.fs.path.joinZ(allocator, &.{ workspace_dir, "memory.db" })
     else if (std_compat.fs.path.isAbsolute(database_path))
-        try allocator.dupeZ(u8, database_path)
+        try allocator.dupeSentinel(u8, database_path, 0)
     else
         try std_compat.fs.path.joinZ(allocator, &.{ workspace_dir, database_path });
     errdefer if (db_path) |p| allocator.free(std.mem.span(p));
@@ -309,7 +309,7 @@ pub fn resolvePaths(
     var pg_connect_timeout_secs: u32 = 30;
     if (postgres_cfg) |pcfg| {
         if (pcfg.url.len > 0) {
-            pg_url = try allocator.dupeZ(u8, pcfg.url);
+            pg_url = try allocator.dupeSentinel(u8, pcfg.url, 0);
         }
         pg_schema = pcfg.schema;
         pg_table = pcfg.table;
@@ -459,22 +459,22 @@ fn applyPostgresConnectTimeout(
     base_url: []const u8,
     timeout_secs: u32,
 ) ![:0]u8 {
-    if (base_url.len == 0) return allocator.dupeZ(u8, base_url);
-    if (timeout_secs == 0) return allocator.dupeZ(u8, base_url);
-    if (std.mem.indexOf(u8, base_url, "connect_timeout=") != null) return allocator.dupeZ(u8, base_url);
+    if (base_url.len == 0) return allocator.dupeSentinel(u8, base_url, 0);
+    if (timeout_secs == 0) return allocator.dupeSentinel(u8, base_url, 0);
+    if (std.mem.indexOf(u8, base_url, "connect_timeout=") != null) return allocator.dupeSentinel(u8, base_url, 0);
 
     // URI form: postgresql://... or postgres://...
     if (std.mem.indexOf(u8, base_url, "://") != null) {
         const sep: u8 = if (std.mem.indexOfScalar(u8, base_url, '?') != null) '&' else '?';
         const out = try std.fmt.allocPrint(allocator, "{s}{c}connect_timeout={d}", .{ base_url, sep, timeout_secs });
         defer allocator.free(out);
-        return allocator.dupeZ(u8, out);
+        return allocator.dupeSentinel(u8, out, 0);
     }
 
     // Keyword/value conninfo form.
     const out = try std.fmt.allocPrint(allocator, "{s} connect_timeout={d}", .{ base_url, timeout_secs });
     defer allocator.free(out);
-    return allocator.dupeZ(u8, out);
+    return allocator.dupeSentinel(u8, out, 0);
 }
 
 // ── Tests ────────────────────────────────────────────────────────

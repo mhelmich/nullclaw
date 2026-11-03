@@ -787,8 +787,8 @@ test "SubagentConfig defaults" {
 }
 
 test "TaskStatus enum values" {
-    try std.testing.expect(@intFromEnum(TaskStatus.running) != @intFromEnum(TaskStatus.completed));
-    try std.testing.expect(@intFromEnum(TaskStatus.completed) != @intFromEnum(TaskStatus.failed));
+    try std.testing.expect(@backingInt(TaskStatus.running) != @backingInt(TaskStatus.completed));
+    try std.testing.expect(@backingInt(TaskStatus.completed) != @backingInt(TaskStatus.failed));
 }
 
 test "TaskState initial defaults" {

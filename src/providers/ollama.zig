@@ -635,7 +635,7 @@ test "buildAuthHeaders without api_key returns empty" {
 
 test "buildAuthHeaders errors when api_key exceeds header buffer" {
     // Regression: a too-long cloud key must fail closed instead of dropping auth.
-    const long_key = [_]u8{'a'} ** 600;
+    const long_key: [600]u8 = @splat('a');
     const p = OllamaProvider.init(std.testing.allocator, null, long_key[0..]);
     var headers_buf: [1][]const u8 = undefined;
     var auth_hdr_buf: [512]u8 = undefined;

@@ -242,8 +242,8 @@ pub const ChannelManager = struct {
     }
 
     fn channelTypeForModule(comptime module: type, comptime field_name: []const u8) type {
-        inline for (std.meta.declarations(module)) |decl| {
-            const candidate = @field(module, decl.name);
+        inline for (@typeInfo(module).@"struct".decl_names) |decl| {
+            const candidate = @field(module, decl);
             if (comptime @TypeOf(candidate) == type) {
                 const T = candidate;
                 if (comptime @hasDecl(T, "initFromConfig") and @hasDecl(T, "channel")) {
@@ -256,7 +256,7 @@ pub const ChannelManager = struct {
 
     /// Scan config, create channel instances, register in registry.
     pub fn collectConfiguredChannels(self: *ChannelManager) !void {
-        inline for (std.meta.fields(config_types.ChannelsConfig)) |field| {
+        inline for (@import("meta_compat.zig").fields(config_types.ChannelsConfig)) |field| {
             if (comptime std.mem.eql(u8, field.name, "cli") or std.mem.eql(u8, field.name, "webhook")) {
                 continue;
             }
@@ -492,20 +492,20 @@ pub const ChannelManager = struct {
 // ════════════════════════════════════════════════════════════════════════════
 
 test "PollingState has telegram signal weixin matrix and max variants" {
-    try std.testing.expect(@intFromEnum(@as(std.meta.Tag(PollingState), .telegram)) !=
-        @intFromEnum(@as(std.meta.Tag(PollingState), .signal)));
-    try std.testing.expect(@intFromEnum(@as(std.meta.Tag(PollingState), .signal)) !=
-        @intFromEnum(@as(std.meta.Tag(PollingState), .weixin)));
-    try std.testing.expect(@intFromEnum(@as(std.meta.Tag(PollingState), .weixin)) !=
-        @intFromEnum(@as(std.meta.Tag(PollingState), .matrix)));
-    try std.testing.expect(@intFromEnum(@as(std.meta.Tag(PollingState), .matrix)) !=
-        @intFromEnum(@as(std.meta.Tag(PollingState), .max)));
+    try std.testing.expect(@backingInt(@as(std.meta.Tag(PollingState), .telegram)) !=
+        @backingInt(@as(std.meta.Tag(PollingState), .signal)));
+    try std.testing.expect(@backingInt(@as(std.meta.Tag(PollingState), .signal)) !=
+        @backingInt(@as(std.meta.Tag(PollingState), .weixin)));
+    try std.testing.expect(@backingInt(@as(std.meta.Tag(PollingState), .weixin)) !=
+        @backingInt(@as(std.meta.Tag(PollingState), .matrix)));
+    try std.testing.expect(@backingInt(@as(std.meta.Tag(PollingState), .matrix)) !=
+        @backingInt(@as(std.meta.Tag(PollingState), .max)));
 }
 
 test "ListenerType enum values distinct" {
-    try std.testing.expect(@intFromEnum(ListenerType.polling) != @intFromEnum(ListenerType.gateway_loop));
-    try std.testing.expect(@intFromEnum(ListenerType.gateway_loop) != @intFromEnum(ListenerType.webhook_only));
-    try std.testing.expect(@intFromEnum(ListenerType.webhook_only) != @intFromEnum(ListenerType.not_implemented));
+    try std.testing.expect(@backingInt(ListenerType.polling) != @backingInt(ListenerType.gateway_loop));
+    try std.testing.expect(@backingInt(ListenerType.gateway_loop) != @backingInt(ListenerType.webhook_only));
+    try std.testing.expect(@backingInt(ListenerType.webhook_only) != @backingInt(ListenerType.not_implemented));
 }
 
 test "isPollingSourceDuplicate detects duplicate signal source" {

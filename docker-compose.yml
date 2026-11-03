@@ -3,7 +3,7 @@ x-nullclaw-build: &nullclaw-build
   dockerfile: Dockerfile
   target: ${NULLCLAW_DOCKER_TARGET:-release}
   args:
-    ZIG_VERSION: "0.16.0"
+    ZIG_VERSION: "0.17.0"
     VERSION: ${NULLCLAW_VERSION:-dev}
 
 services:

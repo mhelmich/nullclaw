@@ -362,9 +362,9 @@ test "every enabled channel has non-empty configured_message text" {
     for (known_channels) |meta| {
         if (!isBuildEnabled(meta.id)) continue;
         try std.testing.expect(meta.configured_message.len > 0);
-        const has_label = std.ascii.indexOfIgnoreCase(meta.configured_message, meta.label) != null;
-        const has_configured = std.ascii.indexOfIgnoreCase(meta.configured_message, "configured") != null or
-            std.ascii.indexOfIgnoreCase(meta.configured_message, "enabled") != null;
+        const has_label = std.ascii.findIgnoreCase(meta.configured_message, meta.label) != null;
+        const has_configured = std.ascii.findIgnoreCase(meta.configured_message, "configured") != null or
+            std.ascii.findIgnoreCase(meta.configured_message, "enabled") != null;
         try std.testing.expect(has_label or has_configured);
     }
 }

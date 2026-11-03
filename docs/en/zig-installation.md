@@ -10,11 +10,11 @@ brew install nullclaw
 ```
 
 Use the Debian steps below only when you want to build NullClaw from source and
-need the exact pinned Zig 0.16.0 toolchain.
+need the exact pinned Zig 0.17.0 toolchain.
 
 ## Debian
 
-These steps install Zig 0.16.0 from the official x86_64 Linux tarball on a fresh Debian system.
+These steps install Zig 0.17.0 from the official x86_64 Linux tarball on a fresh Debian system.
 Run the `apt` commands as root, or prefix each with `sudo` if you have a non-root user.
 
 The repository CI and container builds resolve Zig downloads through `.github/scripts/install-zig.sh`.
@@ -33,35 +33,35 @@ This page keeps the manual Debian path explicit for users setting up Zig before 
    ```
 
 3. Visit [ziglang.org/download](https://ziglang.org/download/) and copy the URL for
-   Zig 0.16.0. On a typical Debian x86_64 box, that is the Linux `x86_64`
+   Zig 0.17.0. On a typical Debian x86_64 box, that is the Linux `x86_64`
    variant:
 
-   [https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz](https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz)
+   [https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz](https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz)
 
 4. Download the tarball:
 
    ```bash
-   wget https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+   wget https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
    ```
 
 5. Verify the archive checksum from the official download metadata:
 
    ```bash
    printf '%s  %s\n' \
-     70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 \
-     zig-x86_64-linux-0.16.0.tar.xz | sha256sum -c -
+     1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026 \
+     zig-x86_64-linux-0.17.0.tar.xz | sha256sum -c -
    ```
 
 6. Extract the archive:
 
    ```bash
-   tar -xf zig-x86_64-linux-0.16.0.tar.xz
+   tar -xf zig-x86_64-linux-0.17.0.tar.xz
    ```
 
 7. Add the extracted directory to your `PATH`:
 
    ```bash
-   export PATH="$PWD/zig-x86_64-linux-0.16.0:$PATH"
+   export PATH="$PWD/zig-x86_64-linux-0.17.0:$PATH"
    ```
 
    To keep Zig available in new shells, add the same `export` line with the
@@ -73,4 +73,4 @@ This page keeps the manual Debian path explicit for users setting up Zig before 
    zig version
    ```
 
-   The output must be `0.16.0`.
+   The output must be `0.17.0`.

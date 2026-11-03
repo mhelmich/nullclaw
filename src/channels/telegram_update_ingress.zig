@@ -404,11 +404,11 @@ test "contentWithReplyContext prepends quoted reply to user content" {
 
 test "contentWithReplyContext truncates long reply with ellipsis" {
     const allocator = std.testing.allocator;
-    const long_reply = "a" ** (REPLY_PREVIEW_MAX_BYTES + 50);
+    const long_reply = &@import("../util/repeat.zig").repeat("a", (REPLY_PREVIEW_MAX_BYTES + 50));
     const result = try contentWithReplyContext(allocator, "ok", long_reply);
     defer allocator.free(result);
 
-    const expected_prefix = "[Replying to \"" ++ "a" ** REPLY_PREVIEW_MAX_BYTES ++ "...\"] ok";
+    const expected_prefix = "[Replying to \"" ++ &@import("../util/repeat.zig").repeat("a", REPLY_PREVIEW_MAX_BYTES) ++ "...\"] ok";
     try std.testing.expectEqualStrings(expected_prefix, result);
 }
 

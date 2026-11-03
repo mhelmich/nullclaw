@@ -26,6 +26,13 @@ pub fn io() Io {
     return fallback_threaded.io();
 }
 
+/// Local socket tests use real socket pairs, which the deterministic test I/O
+/// implementation does not support.
+pub fn networkIo() Io {
+    if (builtin.is_test) return fallback_threaded.io();
+    return io();
+}
+
 pub fn environ() std.process.Environ {
     if (process_environ) |env| return env;
     return switch (builtin.os.tag) {
@@ -57,7 +64,7 @@ pub fn argsAlloc(allocator: Allocator) ![]const [:0]const u8 {
     }
 
     while (iter.next()) |arg| {
-        try list.append(allocator, try allocator.dupeZ(u8, arg));
+        try list.append(allocator, try allocator.dupeSentinel(u8, arg, 0));
     }
 
     return try list.toOwnedSlice(allocator);

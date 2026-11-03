@@ -410,7 +410,7 @@ test "parseQmdJson handles empty input" {
 
 test "max_snippet_chars truncation" {
     const allocator = std.testing.allocator;
-    const long_content = "A" ** 1000;
+    const long_content = &@import("../../util/repeat.zig").repeat("A", 1000);
     const json = try std.fmt.allocPrint(allocator,
         \\[{{"path":"doc.md","content":"{s}"}}]
     , .{long_content});
@@ -430,7 +430,7 @@ test "max_snippet_chars truncation" {
 
 test "max_injected_chars total limit" {
     const allocator = std.testing.allocator;
-    const content_200 = "B" ** 200;
+    const content_200 = &@import("../../util/repeat.zig").repeat("B", 200);
     const json = try std.fmt.allocPrint(allocator,
         \\[{{"path":"a.md","content":"{s}"}},
         \\ {{"path":"b.md","content":"{s}"}},

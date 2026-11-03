@@ -78,7 +78,7 @@ pub const WebChannel = struct {
     bus: ?*bus_mod.Bus = null,
 
     // Active auth token (configured/env/generate).
-    token: [128]u8 = [_]u8{0} ** 128,
+    token: [128]u8 = @splat(0),
     token_len: u8 = 0,
     token_initialized: bool = false,
 
@@ -99,7 +99,7 @@ pub const WebChannel = struct {
     relay_socket_fd: std.atomic.Value(SocketFd) = std.atomic.Value(SocketFd).init(invalid_socket),
     relay_pairing_guard: ?pairing_mod.PairingGuard = null,
     relay_pairing_issued_at: i64 = 0,
-    jwt_signing_key: [32]u8 = [_]u8{0} ** 32,
+    jwt_signing_key: [32]u8 = @splat(0),
     jwt_ready: bool = false,
     relay_security_mu: std_compat.sync.Mutex = .{},
     session_client_bindings: std.StringHashMapUnmanaged([]const u8) = .empty,
@@ -1611,13 +1611,13 @@ pub const WebChannel = struct {
 
     pub const ConnectionList = struct {
         mutex: std_compat.sync.Mutex = .{},
-        entries: [MAX_TRACKED]?ConnEntry = [_]?ConnEntry{null} ** MAX_TRACKED,
+        entries: [MAX_TRACKED]?ConnEntry = @splat(null),
 
         const MAX_TRACKED = 64;
 
         const ConnEntry = struct {
             conn: *websocket.Conn,
-            session_id: [64]u8 = [_]u8{0} ** 64,
+            session_id: [64]u8 = @splat(0),
             session_len: u8 = 0,
         };
 
@@ -1683,7 +1683,7 @@ pub const WebChannel = struct {
     const WsHandler = struct {
         web_channel: *WebChannel,
         conn: *websocket.Conn,
-        session_id: [64]u8 = [_]u8{0} ** 64,
+        session_id: [64]u8 = @splat(0),
         session_len: u8 = 0,
 
         pub fn init(h: *websocket.Handshake, conn: *websocket.Conn, web_channel: *WebChannel) !WsHandler {
@@ -2046,7 +2046,7 @@ test "WebChannel validateToken rejects wrong length" {
 
 test "WebChannel validateToken rejects before init" {
     const ch = WebChannel.initFromConfig(std.testing.allocator, .{});
-    try std.testing.expect(!ch.validateToken("a" ** 64));
+    try std.testing.expect(!ch.validateToken(&@import("../util/repeat.zig").repeat("a", 64)));
 }
 
 test "WebChannel setBus stores bus reference" {
@@ -2341,7 +2341,7 @@ test "WebChannel relay e2e payload helpers roundtrip" {
     var ch = WebChannel.initFromConfig(std.testing.allocator, .{
         .transport = "relay",
     });
-    const key = [_]u8{0x31} ** 32;
+    const key: [32]u8 = @splat(0x31);
     const plain = "{\"content\":\"hello\"}";
 
     const encrypted = try ch.encryptE2ePayload(key, plain);
@@ -2492,7 +2492,7 @@ test "WebChannel relay encrypted user_message is published to bus" {
     var bus = bus_mod.Bus.init();
     ch.setBus(&bus);
 
-    const key = [_]u8{0x44} ** 32;
+    const key: [32]u8 = @splat(0x44);
     try ch.upsertE2eSession("ui-42", .{ .key = key });
 
     const access_token = try ch.issueUiAccessToken("ui-42");

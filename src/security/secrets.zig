@@ -386,8 +386,8 @@ pub const SecretStore = struct {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 test "encrypt then decrypt roundtrip" {
-    const key = [_]u8{0x42} ** 32;
-    const nonce = [_]u8{0x01} ** 12;
+    const key: [32]u8 = @splat(0x42);
+    const nonce: [12]u8 = @splat(0x01);
     const plaintext = "hello nullclaw";
 
     var enc_buf: [256]u8 = undefined;
@@ -746,7 +746,7 @@ test "secret store refuses symlink key path" {
     defer tmp_dir.cleanup();
     const tmp_path = try @import("compat").fs.Dir.wrap(tmp_dir.dir).realpathAlloc(std.testing.allocator, ".");
     defer std.testing.allocator.free(tmp_path);
-    const victim = [_]u8{'0'} ** (KEY_LEN * 2);
+    const victim: [128]u8 = @splat('0');
     try @import("compat").fs.Dir.wrap(tmp_dir.dir).writeFile(.{ .sub_path = "victim-key", .data = &victim });
     try @import("compat").fs.Dir.wrap(tmp_dir.dir).symLink("victim-key", ".secret_key", .{});
 
@@ -768,7 +768,7 @@ test "secret store rejects truncated even-length key" {
     defer tmp_dir.cleanup();
     const tmp_path = try @import("compat").fs.Dir.wrap(tmp_dir.dir).realpathAlloc(std.testing.allocator, ".");
     defer std.testing.allocator.free(tmp_path);
-    const truncated_key = [_]u8{'0'} ** (KEY_LEN * 2 - 2);
+    const truncated_key: [126]u8 = @splat('0');
     try @import("compat").fs.Dir.wrap(tmp_dir.dir).writeFile(.{
         .sub_path = ".secret_key",
         .data = &truncated_key,
@@ -850,9 +850,9 @@ test "secret store corrupt hex returns error" {
 }
 
 test "encrypt with different nonce produces different output" {
-    const key = [_]u8{0x42} ** 32;
-    const nonce1 = [_]u8{0x01} ** 12;
-    const nonce2 = [_]u8{0x02} ** 12;
+    const key: [32]u8 = @splat(0x42);
+    const nonce1: [12]u8 = @splat(0x01);
+    const nonce2: [12]u8 = @splat(0x02);
     const plaintext = "same input";
 
     var enc1_buf: [256]u8 = undefined;
@@ -875,9 +875,9 @@ test "encrypt with different nonce produces different output" {
 }
 
 test "decrypt with wrong key fails" {
-    const key1 = [_]u8{0x01} ** 32;
-    const key2 = [_]u8{0x02} ** 32;
-    const nonce = [_]u8{0xAB} ** 12;
+    const key1: [32]u8 = @splat(0x01);
+    const key2: [32]u8 = @splat(0x02);
+    const nonce: [12]u8 = @splat(0xAB);
     const plaintext = "secret message";
 
     var enc_buf: [256]u8 = undefined;
@@ -889,8 +889,8 @@ test "decrypt with wrong key fails" {
 }
 
 test "encrypt buffer too small fails" {
-    const key = [_]u8{0x42} ** 32;
-    const nonce = [_]u8{0x01} ** 12;
+    const key: [32]u8 = @splat(0x42);
+    const nonce: [12]u8 = @splat(0x01);
     const plaintext = "hello";
 
     var tiny_buf: [5]u8 = undefined; // Too small (needs plaintext.len + 16 for tag)
@@ -899,8 +899,8 @@ test "encrypt buffer too small fails" {
 }
 
 test "decrypt ciphertext too short fails" {
-    const key = [_]u8{0x42} ** 32;
-    const nonce = [_]u8{0x01} ** 12;
+    const key: [32]u8 = @splat(0x42);
+    const nonce: [12]u8 = @splat(0x01);
 
     // Less than tag length
     var dec_buf: [256]u8 = undefined;
@@ -988,8 +988,8 @@ test "secret store encrypt decrypt multiple values same store" {
 }
 
 test "ChaCha20Poly1305.decrypt tag failure returns DecryptionFailed not segfault" {
-    const key: [32]u8 = [_]u8{1} ** 32;
-    const nonce: [12]u8 = [_]u8{2} ** 12;
+    const key: [32]u8 = @splat(1);
+    const nonce: [12]u8 = @splat(2);
     const plaintext = "secret data";
 
     // Encrypt to a stack buffer.

@@ -22,9 +22,7 @@ const VectorStore = store_mod.VectorStore;
 const VectorResult = store_mod.VectorResult;
 const HealthStatus = store_mod.HealthStatus;
 
-const c = if (build_options.enable_postgres) @cImport({
-    @cInclude("libpq-fe.h");
-}) else struct {};
+const c = if (build_options.enable_postgres) @import("postgres_c") else struct {};
 
 // ── Config ────────────────────────────────────────────────────────
 
@@ -109,7 +107,7 @@ pub const PgvectorVectorStore = struct {
     fn connect(self: *Self) !void {
         if (!build_options.enable_postgres) return;
 
-        const url_z = try self.allocator.dupeZ(u8, self.connection_url);
+        const url_z = try self.allocator.dupeSentinel(u8, self.connection_url, 0);
         defer self.allocator.free(url_z);
 
         self.conn = c.PQconnectdb(url_z.ptr);
@@ -187,10 +185,10 @@ pub const PgvectorVectorStore = struct {
         const vec_str = try formatVector(alloc, embedding);
         defer alloc.free(vec_str);
 
-        const vec_z = try alloc.dupeZ(u8, vec_str);
+        const vec_z = try alloc.dupeSentinel(u8, vec_str, 0);
         defer alloc.free(vec_z);
 
-        const key_z = try alloc.dupeZ(u8, key);
+        const key_z = try alloc.dupeSentinel(u8, key, 0);
         defer alloc.free(key_z);
 
         const sql = try std.fmt.allocPrintZ(
@@ -217,11 +215,11 @@ pub const PgvectorVectorStore = struct {
         const vec_str = try formatVector(alloc, query_embedding);
         defer alloc.free(vec_str);
 
-        const vec_z = try alloc.dupeZ(u8, vec_str);
+        const vec_z = try alloc.dupeSentinel(u8, vec_str, 0);
         defer alloc.free(vec_z);
 
         var limit_buf: [16]u8 = undefined;
-        const limit_str = try std.fmt.bufPrintZ(&limit_buf, "{d}", .{limit});
+        const limit_str = try std.fmt.bufPrintSentinel(&limit_buf, "{d}", .{limit}, 0);
 
         // Use 1 - cosine_distance as similarity score
         const sql = try std.fmt.allocPrintZ(
@@ -276,7 +274,7 @@ pub const PgvectorVectorStore = struct {
         const conn = self.conn orelse return error.PgNotConnected;
         const alloc = self.allocator;
 
-        const key_z = try alloc.dupeZ(u8, key);
+        const key_z = try alloc.dupeSentinel(u8, key, 0);
         defer alloc.free(key_z);
 
         const sql = try std.fmt.allocPrintZ(alloc, "DELETE FROM {s} WHERE key = $1", .{self.table_name});

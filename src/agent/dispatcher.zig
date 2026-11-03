@@ -2436,7 +2436,7 @@ test "formatNativeToolResults escapes special characters in output" {
 }
 
 test "DispatcherKind enum values" {
-    try std.testing.expect(@intFromEnum(DispatcherKind.xml) != @intFromEnum(DispatcherKind.native));
+    try std.testing.expect(@backingInt(DispatcherKind.xml) != @backingInt(DispatcherKind.native));
 }
 
 // ── parseToolCalls with OpenAI JSON format ──────────────────────

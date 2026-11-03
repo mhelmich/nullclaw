@@ -8578,8 +8578,8 @@ test "line webhook caches reply token only after sender allowlist passes" {
     var state = GatewayState.init(std.testing.allocator);
     defer state.deinit();
 
-    const allowed_id = "U" ++ ("1" ** 32);
-    const blocked_id = "U" ++ ("2" ** 32);
+    const allowed_id = "U" ++ (&@import("util/repeat.zig").repeat("1", 32));
+    const blocked_id = "U" ++ (&@import("util/repeat.zig").repeat("2", 32));
     const allow_from = [_][]const u8{allowed_id};
     state.line_allow_from = &allow_from;
     state.line_access_token = "test-token";

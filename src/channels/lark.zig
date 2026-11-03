@@ -1307,7 +1307,7 @@ pub const LarkChannel = struct {
         const uri = std.Uri.parse(connect_url) catch return error.LarkApiError;
         if (!std.ascii.eqlIgnoreCase(uri.scheme, "wss")) return error.LarkApiError;
 
-        const host = (uri.getHost(host_buf) catch return error.LarkApiError).bytes;
+        const host = (std.Io.net.HostName.fromUri(uri, host_buf) catch return error.LarkApiError).bytes;
         const port = uri.port orelse 443;
         const raw_path = componentAsSlice(uri.path);
         const query = if (uri.query) |q| componentAsSlice(q) else "";

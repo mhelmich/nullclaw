@@ -68,7 +68,7 @@ pub const pricing_table = [_]struct { []const u8, ModelPricing }{
 
 pub fn resolvePricing(model: []const u8) ModelPricing {
     for (pricing_table) |entry| {
-        if (std.ascii.indexOfIgnoreCase(model, entry[0]) != null) {
+        if (std.ascii.findIgnoreCase(model, entry[0]) != null) {
             return entry[1];
         }
     }

@@ -497,7 +497,7 @@ pub const ArduinoPeripheral = struct {
 /// Uses /sys/class/gpio/export, direction, value for pin access.
 pub const RpiGpioPeripheral = struct {
     connected: bool = false,
-    exported_pins: [64]bool = [_]bool{false} ** 64,
+    exported_pins: [64]bool = @splat(false),
 
     const rpi_vtable = Peripheral.VTable{
         .name = rpiName,

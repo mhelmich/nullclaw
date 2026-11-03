@@ -649,7 +649,7 @@ pub const OtelObserver = struct {
     };
 
     const TraceContext = struct {
-        trace_id: [32]u8 = .{0} ** 32,
+        trace_id: [32]u8 = @splat(0),
         start_ns: u64 = 0,
         active: bool = false,
     };
@@ -822,7 +822,7 @@ pub const OtelObserver = struct {
         var span_id: [16]u8 = undefined;
         randomHex(&span_id);
         const trace_ctx = self.contextForCurrentThread(if (start_ns > 0) start_ns else end_ns);
-        const trace_id = if (trace_ctx) |ctx| ctx.trace_id else [_]u8{0} ** 32;
+        const trace_id = if (trace_ctx) |ctx| ctx.trace_id else @as([32]u8, @splat(0));
 
         var attributes: std.ArrayListUnmanaged(OtelAttribute) = .empty;
         for (attrs) |attr| {
@@ -1363,7 +1363,7 @@ test "LogObserver trace id roundtrip" {
     setLightweightTraceId(null);
     defer setLightweightTraceId(null);
 
-    const trace_id = [_]u8{'b'} ** 32;
+    const trace_id: [32]u8 = @splat('b');
     obs.setTraceId(trace_id);
     try std.testing.expectEqual(trace_id, obs.getTraceId().?);
 }
@@ -1531,7 +1531,7 @@ test "FileObserver persists trace_id when set" {
 
     var file_obs = FileObserver{ .path = path };
     const obs = file_obs.observer();
-    const trace_id = [_]u8{'a'} ** 32;
+    const trace_id: [32]u8 = @splat('a');
     obs.setTraceId(trace_id);
 
     const event = ObserverEvent{ .heartbeat_tick = {} };

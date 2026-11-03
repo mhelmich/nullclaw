@@ -165,7 +165,7 @@ pub const ApiMemory = struct {
         };
         alloc.free(response.headers);
         return .{
-            .status = @enumFromInt(@as(u10, @intCast(response.status_code))),
+            .status = @fromBackingInt(@intCast(@as(u10, @intCast(response.status_code)))),
             .body = response.body,
         };
     }
@@ -718,7 +718,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API store failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API store failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
     }
@@ -736,7 +736,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API recall failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API recall failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -769,7 +769,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API list failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API list failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -875,7 +875,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API saveMessage failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API saveMessage failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
     }
@@ -890,7 +890,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API loadMessages failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API loadMessages failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -908,7 +908,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok and resp.status != .not_found) {
-            log.warn("API clearMessages failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API clearMessages failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -919,7 +919,7 @@ pub const ApiMemory = struct {
         defer alloc.free(usage_resp.body);
 
         if (usage_resp.status != .ok and usage_resp.status != .not_found) {
-            log.warn("API clearUsage failed: status={d}", .{@intFromEnum(usage_resp.status)});
+            log.warn("API clearUsage failed: status={d}", .{@backingInt(usage_resp.status)});
             return error.ApiRequestFailed;
         }
     }
@@ -935,7 +935,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API clearAutoSaved failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API clearAutoSaved failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
     }
@@ -954,7 +954,7 @@ pub const ApiMemory = struct {
         defer alloc.free(resp.body);
 
         if (resp.status != .ok) {
-            log.warn("API saveUsage failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API saveUsage failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
     }
@@ -971,7 +971,7 @@ pub const ApiMemory = struct {
 
         if (resp.status == .not_found) return null;
         if (resp.status != .ok) {
-            log.warn("API loadUsage failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API loadUsage failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -990,7 +990,7 @@ pub const ApiMemory = struct {
 
         if (resp.status == .not_found) return error.NotSupported;
         if (resp.status != .ok) {
-            log.warn("API history countSessions failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API history countSessions failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -1010,7 +1010,7 @@ pub const ApiMemory = struct {
 
         if (resp.status == .not_found) return error.NotSupported;
         if (resp.status != .ok) {
-            log.warn("API history listSessions failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API history listSessions failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -1030,7 +1030,7 @@ pub const ApiMemory = struct {
 
         if (resp.status == .not_found) return error.NotSupported;
         if (resp.status != .ok) {
-            log.warn("API history countDetailedMessages failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API history countDetailedMessages failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 
@@ -1050,7 +1050,7 @@ pub const ApiMemory = struct {
 
         if (resp.status == .not_found) return error.NotSupported;
         if (resp.status != .ok) {
-            log.warn("API history loadMessagesDetailed failed: status={d}", .{@intFromEnum(resp.status)});
+            log.warn("API history loadMessagesDetailed failed: status={d}", .{@backingInt(resp.status)});
             return error.ApiRequestFailed;
         }
 

@@ -52,7 +52,7 @@ pub const TeamsChannel = struct {
 
     // Placeholder activity ID cache: maps recipient target → activityId for pending placeholders.
     // Guarded by placeholder_mutex for thread safety (startTyping and vtableSend may run on different threads).
-    placeholder_entries: [MAX_PLACEHOLDER_ENTRIES]?PlaceholderEntry = .{null} ** MAX_PLACEHOLDER_ENTRIES,
+    placeholder_entries: [MAX_PLACEHOLDER_ENTRIES]?PlaceholderEntry = @splat(null),
     placeholder_mutex: std_compat.sync.Mutex = .{},
 
     pub const MAX_PLACEHOLDER_ENTRIES = 16;

@@ -124,7 +124,7 @@ pub const SseConnection = struct {
         var redirect_buf: [4096]u8 = undefined;
         const response = try req.receiveHead(&redirect_buf);
 
-        const status_code = @intFromEnum(response.head.status);
+        const status_code = @backingInt(response.head.status);
         if (status_code < 200 or status_code >= 300) {
             return error.ConnectionFailed;
         }
