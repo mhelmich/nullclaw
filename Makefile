@@ -7,6 +7,8 @@ PROFILE ?= gateway
 SERVICE ?= gateway
 RUN_ARGS ?=
 CONFIG_ARGS ?= --interactive
+CHANNELS ?= cli,slack,signal,web,matrix,email
+ENGINES ?= sqlite,markdown,base
 COMPOSE_BAKE ?= true
 NULLCLAW_PORT ?= 3210
 NULLCLAW_BIND ?= 127.0.0.1
@@ -22,12 +24,17 @@ export NULLCLAW_BIND
 export NULLCLAW_UID
 export NULLCLAW_GID
 
-.PHONY: build config up down run agent status shell logs check-buildx
+.PHONY: build build-custom config up down run agent status shell logs check-buildx
 
 check-buildx:
 	$(BUILDX) version >/dev/null
 
 build: check-buildx
+	$(COMPOSE) --profile $(PROFILE) build $(SERVICE)
+
+build-custom: check-buildx
+	NULLCLAW_CHANNELS="$(CHANNELS)" \
+	NULLCLAW_ENGINES="$(ENGINES)" \
 	$(COMPOSE) --profile $(PROFILE) build $(SERVICE)
 
 config: check-buildx

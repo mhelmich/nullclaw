@@ -5,6 +5,8 @@ x-nullclaw-build: &nullclaw-build
   args:
     ZIG_VERSION: "0.17.0"
     VERSION: ${NULLCLAW_VERSION:-dev}
+    CHANNELS: ${NULLCLAW_CHANNELS:-cli,slack,signal,web,matrix,email}
+    ENGINES: ${NULLCLAW_ENGINES:-sqlite,markdown,base}
 
 services:
   init-data:

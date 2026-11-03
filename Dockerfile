@@ -5,6 +5,8 @@
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS builder
 
 ARG ZIG_VERSION=0.17.0
+ARG CHANNELS=cli,slack,signal,web,matrix,email
+ARG ENGINES=sqlite,markdown,base
 
 RUN apk add --no-cache bash curl git musl-dev python3
 
@@ -39,7 +41,8 @@ RUN --mount=type=cache,target=/root/.cache/zig \
       arm64) zig_target="aarch64-linux-musl" ;; \
       *) echo "Unsupported TARGETARCH: ${arch}" >&2; exit 1 ;; \
     esac; \
-    zig build -Dtarget="${zig_target}" -Doptimize=ReleaseSmall -Dversion="${VERSION}"
+    zig build -Dtarget="${zig_target}" -Doptimize=ReleaseSmall -Dversion="${VERSION}" \
+      -Dchannels="${CHANNELS}" -Dengines="${ENGINES}"
 
 # ── Stage 2: Config Prep ─────────────────────────────────────
 FROM busybox:1.38 AS config
