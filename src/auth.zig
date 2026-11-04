@@ -11,6 +11,48 @@ const config_paths = @import("config_paths.zig");
 const fs_compat = @import("fs_compat.zig");
 const http_util = @import("http_util.zig");
 const json_util = @import("json_util.zig");
+const log = std.log.scoped(.auth);
+
+const MAX_REFRESH_ERROR_LOG_BODY_BYTES: usize = 2048;
+
+const SafeLogBody = struct {
+    bytes: []const u8,
+    truncated: bool,
+};
+
+fn safeRefreshErrorBody(body: []const u8, refresh_token: []const u8, client_id: []const u8, buffer: []u8) SafeLogBody {
+    var input_index: usize = 0;
+    var output_index: usize = 0;
+
+    while (input_index < body.len) {
+        const replacement: ?[]const u8 = if (refresh_token.len > 0 and std.mem.startsWith(u8, body[input_index..], refresh_token)) blk: {
+            input_index += refresh_token.len;
+            break :blk "[REDACTED]";
+        } else if (client_id.len > 0 and std.mem.startsWith(u8, body[input_index..], client_id)) blk: {
+            input_index += client_id.len;
+            break :blk "[REDACTED]";
+        } else if (body[input_index] == '\n' or body[input_index] == '\r' or body[input_index] == '\t' or body[input_index] < 0x20 or body[input_index] == 0x7f) blk: {
+            input_index += 1;
+            break :blk " ";
+        } else null;
+
+        if (replacement) |text| {
+            if (text.len > buffer.len - output_index) {
+                return .{ .bytes = buffer[0..output_index], .truncated = true };
+            }
+            @memcpy(buffer[output_index .. output_index + text.len], text);
+            output_index += text.len;
+        } else {
+            if (output_index == buffer.len) return .{ .bytes = buffer[0..output_index], .truncated = true };
+            const byte = body[input_index];
+            input_index += 1;
+            buffer[output_index] = byte;
+            output_index += 1;
+        }
+    }
+
+    return .{ .bytes = buffer[0..output_index], .truncated = false };
+}
 
 // ── PKCE (RFC 7636) ────────────────────────────────────────────────────
 
@@ -372,9 +414,17 @@ pub fn refreshAccessToken(
         },
         .response_writer = &aw.writer,
     });
-    if (result.status != .ok) return error.TokenRefreshFailed;
-
     const resp_body = aw.writer.buffer[0..aw.writer.end];
+    if (result.status != .ok) {
+        var safe_body_buffer: [MAX_REFRESH_ERROR_LOG_BODY_BYTES]u8 = undefined;
+        const safe_body = safeRefreshErrorBody(resp_body, refresh_token, client_id, &safe_body_buffer);
+        log.err("OAuth token refresh failed: HTTP {d}; response body: {s}{s}", .{
+            @backingInt(result.status),
+            safe_body.bytes,
+            if (safe_body.truncated) " [truncated]" else "",
+        });
+        return error.TokenRefreshFailed;
+    }
 
     var token = try parseTokenResponse(allocator, resp_body);
 
@@ -384,6 +434,21 @@ pub fn refreshAccessToken(
     }
 
     return token;
+}
+
+test "refresh error body redacts token and strips line breaks" {
+    // Regression: TokenRefreshFailed discarded the response diagnostics, while logging raw bodies could leak tokens or forge log lines.
+    var buffer: [64]u8 = undefined;
+    const safe = safeRefreshErrorBody("invalid_grant\nrefresh token=secret-value client=test-client", "secret-value", "test-client", &buffer);
+    try std.testing.expectEqualStrings("invalid_grant refresh token=[REDACTED] client=[REDACTED]", safe.bytes);
+    try std.testing.expect(!safe.truncated);
+}
+
+test "refresh error body marks truncated output" {
+    var buffer: [4]u8 = undefined;
+    const safe = safeRefreshErrorBody("response body", "secret", "test-client", &buffer);
+    try std.testing.expectEqualStrings("resp", safe.bytes);
+    try std.testing.expect(safe.truncated);
 }
 
 // ── Credential Deletion ───────────────────────────────────────────────
