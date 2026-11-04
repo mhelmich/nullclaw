@@ -671,7 +671,18 @@ pub const Config = struct {
             else
                 "default";
             try w.print("        \"{s}\": ", .{account_id});
-            try writePrettyJsonInline(allocator, w, account, "        ");
+            if (comptime @hasField(@TypeOf(account), "bot_token_file")) {
+                if (account.bot_token_file != null) {
+                    var safe_account = account;
+                    safe_account.bot_token = "";
+                    if (account.app_token_file != null) safe_account.app_token = null;
+                    try writePrettyJsonInline(allocator, w, safe_account, "        ");
+                } else {
+                    try writePrettyJsonInline(allocator, w, account, "        ");
+                }
+            } else {
+                try writePrettyJsonInline(allocator, w, account, "        ");
+            }
         }
         try w.print("\n      }}\n    }}", .{});
     }
@@ -1840,7 +1851,7 @@ pub const Config = struct {
             ValidationError.InvalidOtelEndpoint => std.debug.print("Config error: diagnostics.otel.endpoint/otel_endpoint must be an absolute https:// URL (or http:// for localhost/private or container-local collector hosts).\n", .{}),
             ValidationError.InvalidOtelHeader => std.debug.print("Config error: diagnostics.otel.headers/otel_headers must contain valid HTTP header names/values (no CR/LF).\n", .{}),
             ValidationError.InvalidHttpSearchBaseUrl => std.debug.print("Config error: http_request.search_base_url must be https://host[/search] or local http://host[:port][/search] (no query/fragment).\n", .{}),
-            ValidationError.InvalidHttpSearchProvider => std.debug.print("Config error: http_request.search_provider must be one of: auto, searxng, duckduckgo(ddg), brave, firecrawl, tavily, perplexity, exa, jina.\n", .{}),
+            ValidationError.InvalidHttpSearchProvider => std.debug.print("Config error: http_request.search_provider must be one of: auto, searxng, duckduckgo(ddg), brave, firecrawl, tavily, perplexity, exa, jina, freesea.\n", .{}),
             ValidationError.InvalidHttpSearchFallbackProvider => std.debug.print("Config error: http_request.search_fallback_providers entries must be valid providers and cannot be 'auto'.\n", .{}),
             ValidationError.InvalidProviderApiMode => std.debug.print("Config error: models.providers.<name>.api_mode must be 'chat_completions' or 'responses'.\n", .{}),
             ValidationError.InvalidProviderBaseUrl => std.debug.print("Config error: models.providers.<name>.base_url and custom: provider URLs must be absolute http(s) URLs with no query/fragment; plain HTTP is allowed only for localhost/private hosts.\n", .{}),
@@ -7087,6 +7098,34 @@ test "parse slack accounts" {
     for (sc.allow_from) |u| allocator.free(u);
     allocator.free(sc.allow_from);
     allocator.free(cfg.channels.slack);
+}
+
+test "parse slack tokens from secret files" {
+    // Regression: Compose-mounted token files must load without literal token values in config.json.
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    const dir = @import("compat").fs.Dir.wrap(tmp_dir.dir);
+    try dir.writeFile(.{ .sub_path = "bot-token", .data = "xoxb-file-token\n" });
+    try dir.writeFile(.{ .sub_path = "app-token", .data = "xapp-file-token\n" });
+    const path = try dir.realpathAlloc(std.testing.allocator, ".");
+    defer std.testing.allocator.free(path);
+    const bot_path = try std.fmt.allocPrint(std.testing.allocator, "{s}/bot-token", .{path});
+    defer std.testing.allocator.free(bot_path);
+    const app_path = try std.fmt.allocPrint(std.testing.allocator, "{s}/app-token", .{path});
+    defer std.testing.allocator.free(app_path);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var cfg = Config{ .workspace_dir = "/tmp/yc", .config_path = "/tmp/yc/config.json", .allocator = allocator };
+    const json = try std.fmt.allocPrint(
+        allocator,
+        "{{\"channels\":{{\"slack\":{{\"accounts\":{{\"main\":{{\"bot_token_file\":\"{s}\",\"app_token_file\":\"{s}\"}}}}}}}}}}",
+        .{ bot_path, app_path },
+    );
+    try cfg.parseJson(json);
+    try std.testing.expectEqualStrings("xoxb-file-token", cfg.channels.slack[0].bot_token);
+    try std.testing.expectEqualStrings("xapp-file-token", cfg.channels.slack[0].app_token.?);
 }
 
 test "parse irc accounts" {

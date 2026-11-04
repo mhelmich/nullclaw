@@ -438,6 +438,26 @@ NullClaw 内置了原生的 Anthropic provider，可直接连接 Anthropic API�
 - 渠道配置统一在 `channels.<name>` 下。
 - 多账号渠道通常用 `accounts` 包裹。
 
+Slack 账号可以从绝对路径读取凭据，避免把 token 值直接写进 `config.json`：
+
+```json
+{
+  "channels": {
+    "slack": {
+      "accounts": {
+        "default": {
+          "bot_token_file": "/run/secrets/slack_bot_token",
+          "app_token_file": "/run/secrets/slack_app_token"
+        }
+      }
+    }
+  }
+}
+```
+
+nullclaw 必须能读取这些文件，文件内容必须是非空 token。此方式适用于
+Compose secrets；独立 Compose 使用文件挂载，因此也要保护宿主机上的源文件。
+
 外部渠道插件示例：
 
 ```json
@@ -927,6 +947,8 @@ Max 说明：
 - `audit.enabled = true`：建议开启审计日志。
 
 ### 进阶：Web Search + Full Shell（高风险）
+
+`web_search` 支持 Freesea，可将 `http_request.search_provider` 设为 `"freesea"`，也可将其设为备用搜索提供方。请在进程环境中设置 `FREESEA_API_KEY`。Freesea 结果可能包含赞助内容；工具会保留并显示赞助标签、披露说明、优惠信息和原始链接。
 
 仅在你明确理解风险时使用。示例：
 

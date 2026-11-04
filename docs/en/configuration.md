@@ -503,6 +503,28 @@ Notes:
 - Channel config lives under `channels.<name>`.
 - Multi-account channels typically use an `accounts` wrapper.
 
+Slack accounts can load credentials from absolute file paths instead of
+embedding token values in `config.json`:
+
+```json
+{
+  "channels": {
+    "slack": {
+      "accounts": {
+        "default": {
+          "bot_token_file": "/run/secrets/slack_bot_token",
+          "app_token_file": "/run/secrets/slack_app_token"
+        }
+      }
+    }
+  }
+}
+```
+
+The files must be readable by nullclaw and contain a non-empty token. This is
+useful with Compose secrets; standalone Compose mounts file-backed secrets, so
+protect the source files on the host.
+
 External channel plugin example:
 
 ```json
@@ -1129,6 +1151,8 @@ Tunnel providers for exposing the gateway to the public internet. Required for w
 - `audit.enabled = true`: recommended for traceability.
 
 ### Advanced: Web Search + Full Shell (high risk)
+
+`web_search` supports Freesea with `http_request.search_provider: "freesea"` or as a fallback provider. Set `FREESEA_API_KEY` in the process environment. Freesea results may contain sponsored entries; the tool keeps their sponsored label, disclosure, incentive, and returned URL visible.
 
 Use only in controlled environments:
 

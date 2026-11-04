@@ -1071,6 +1071,11 @@ fn parseChannels(self: *Config, channels_value: std.json.Value) !void {
                             const Elem = ptr.child;
                             const parsed = try parseMultiAccountChannel(Elem, self.allocator, channel_value);
                             if (parsed.len > 0) {
+                                if (comptime std.mem.eql(u8, field.name, "slack")) {
+                                    for (@constCast(parsed)) |*account| {
+                                        try resolveSlackSecretFiles(self.allocator, account);
+                                    }
+                                }
                                 @field(self.channels, field.name) = parsed;
                             }
                         }
@@ -1100,6 +1105,36 @@ fn parseChannels(self: *Config, channels_value: std.json.Value) !void {
                 }
             }
         }
+    }
+}
+
+fn readSlackSecretFile(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    const file = try std_compat.fs.openFileAbsolute(path, .{});
+    defer file.close();
+    const contents = try file.readToEndAlloc(allocator, 16 * 1024);
+    const trimmed = std.mem.trim(u8, contents, " \t\r\n");
+    if (trimmed.len == 0) {
+        allocator.free(contents);
+        return error.EmptySlackSecretFile;
+    }
+    if (trimmed.len != contents.len) {
+        const secret = try allocator.dupe(u8, trimmed);
+        allocator.free(contents);
+        return secret;
+    }
+    return contents;
+}
+
+fn resolveSlackSecretFiles(allocator: std.mem.Allocator, account: *types.SlackConfig) !void {
+    if (account.bot_token_file) |path| {
+        if (account.bot_token.len > 0) return error.DuplicateSlackBotToken;
+        account.bot_token = try readSlackSecretFile(allocator, path);
+    }
+    if (account.bot_token.len == 0) return error.MissingSlackBotToken;
+
+    if (account.app_token_file) |path| {
+        if (account.app_token != null) return error.DuplicateSlackAppToken;
+        account.app_token = try readSlackSecretFile(allocator, path);
     }
 }
 
