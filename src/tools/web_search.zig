@@ -28,7 +28,7 @@ const JsonObjectMap = root.JsonObjectMap;
 /// Maximum number of search results.
 const MAX_RESULTS: usize = 10;
 /// Default number of search results.
-const DEFAULT_COUNT: usize = 5;
+const DEFAULT_COUNT: usize = 10;
 /// Default request timeout for backend HTTP calls.
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 /// Upper bound for provider chain size (primary + fallbacks + auto expansions).
@@ -69,7 +69,7 @@ pub const WebSearchTool = struct {
     pub const tool_name = "web_search";
     pub const tool_description = "Search the internet for real-time information, recipes, news, or technical documentation that might not be in your local knowledge base. Use this whenever the user asks for information from the web or the internet.";
     pub const tool_params =
-        \\{"type":"object","properties":{"query":{"type":"string","minLength":1,"description":"Search query"},"count":{"type":"integer","minimum":1,"maximum":10,"default":5,"description":"Number of results (1-10)"},"provider":{"type":"string","description":"Optional provider override (auto,searxng,duckduckgo,ddg,brave,firecrawl,tavily,perplexity,exa,jina,freesea)"}},"required":["query"]}
+        \\{"type":"object","properties":{"query":{"type":"string","minLength":1,"description":"Search query"},"count":{"type":"integer","minimum":1,"maximum":10,"default":10,"description":"Number of results (1-10)"},"provider":{"type":"string","description":"Optional provider override (auto,searxng,duckduckgo,ddg,brave,firecrawl,tavily,perplexity,exa,jina,freesea)"}},"required":["query"]}
     ;
 
     const vtable = root.ToolVTable(@This());
@@ -535,7 +535,7 @@ test "wrapSuccessfulProviderResult wraps web search output" {
     try testing.expect(std.mem.indexOf(u8, wrapped.output, "raw result") != null);
 }
 
-test "parseCount defaults to 5" {
+test "parseCount defaults to 10" {
     const p1 = try root.parseTestArgs("{}");
     defer p1.deinit();
     try testing.expectEqual(@as(usize, DEFAULT_COUNT), parseCount(p1.value.object));
