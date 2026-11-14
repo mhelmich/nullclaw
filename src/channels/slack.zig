@@ -922,13 +922,13 @@ pub const SlackChannel = struct {
         while (self.running.load(.acquire)) {
             const maybe_text = ws.readTextMessage() catch |err| switch (err) {
                 error.ConnectionClosed => {
-                    log.warn("Slack Socket Mode WebSocket closed by peer");
+                    log.warn("Slack Socket Mode WebSocket closed by peer", .{});
                     break;
                 },
                 else => return err,
             };
             const text = maybe_text orelse {
-                log.warn("Slack Socket Mode WebSocket ended without a close frame");
+                log.warn("Slack Socket Mode WebSocket ended without a close frame", .{});
                 break;
             };
             defer self.allocator.free(text);
@@ -945,7 +945,7 @@ pub const SlackChannel = struct {
             if (self.runSocketOnce()) |_| {
                 consecutive_socket_failures = 0;
                 if (self.running.load(.acquire)) {
-                    log.warn("Slack Socket Mode connection ended; reconnecting");
+                    log.warn("Slack Socket Mode connection ended; reconnecting", .{});
                 }
             } else |err| {
                 if (err == error.SlackAuthFailed) {
