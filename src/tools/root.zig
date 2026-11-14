@@ -75,6 +75,17 @@ pub fn parseTestArgs(json_str: []const u8) !std.json.Parsed(JsonValue) {
 }
 
 threadlocal var tls_memory_session_id: ?[]const u8 = null;
+threadlocal var tls_slack_channel_id: ?[]const u8 = null;
+
+pub fn setThreadSlackChannelId(channel_id: ?[]const u8) ?[]const u8 {
+    const previous = tls_slack_channel_id;
+    tls_slack_channel_id = channel_id;
+    return previous;
+}
+
+pub fn threadSlackChannelId() ?[]const u8 {
+    return tls_slack_channel_id;
+}
 
 pub fn setThreadMemorySessionId(session_id: ?[]const u8) ?[]const u8 {
     const previous = tls_memory_session_id;

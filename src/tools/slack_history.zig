@@ -17,7 +17,7 @@ pub const SlackHistoryTool = struct {
     pub const tool_name = "slack_history";
     pub const tool_description = "Read recent messages from a Slack conversation the configured bot can access. Requires a Slack conversation ID such as C123..., G123..., or D123....";
     pub const tool_params =
-        \\{"type":"object","properties":{"channel_id":{"type":"string","description":"Slack conversation ID (C..., G..., or D...)"},"limit":{"type":"integer","minimum":1,"maximum":100,"default":20,"description":"Maximum messages to return"},"oldest":{"type":"string","description":"Optional oldest message timestamp, for example 1712345678.000001"},"latest":{"type":"string","description":"Optional latest message timestamp"}},"required":["channel_id"]}
+        \\{"type":"object","properties":{"channel_id":{"type":"string","description":"Optional Slack conversation ID (C..., G..., or D...). Defaults to the Slack conversation this request came from."},"limit":{"type":"integer","minimum":1,"maximum":100,"default":20,"description":"Maximum messages to return"},"oldest":{"type":"string","description":"Optional oldest message timestamp, for example 1712345678.000001"},"latest":{"type":"string","description":"Optional latest message timestamp"}}}
     ;
 
     const vtable = root.ToolVTable(@This());
@@ -27,8 +27,8 @@ pub const SlackHistoryTool = struct {
     }
 
     pub fn execute(self: *SlackHistoryTool, allocator: std.mem.Allocator, args: JsonObjectMap) !ToolResult {
-        const channel_id = root.getString(args, "channel_id") orelse
-            return ToolResult.fail("Missing required 'channel_id' parameter");
+        const channel_id = root.getString(args, "channel_id") orelse root.threadSlackChannelId() orelse
+            return ToolResult.fail("No channel_id was provided and there is no current Slack conversation context");
         if (!validChannelId(channel_id)) return ToolResult.fail("channel_id must be a Slack conversation ID containing only letters and digits");
 
         const limit = root.getInt(args, "limit") orelse DEFAULT_LIMIT;

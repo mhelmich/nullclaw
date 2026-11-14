@@ -37,6 +37,7 @@ const thread_stacks = @import("thread_stacks.zig");
 const tunnel_mod = @import("tunnel.zig");
 const Atomic = @import("portable_atomic.zig").Atomic;
 const observability = @import("observability.zig");
+const tools_mod = @import("tools/root.zig");
 
 const log = std.log.scoped(.daemon);
 
@@ -892,6 +893,7 @@ fn resolveInboundRouteSessionKey(
 ) ?[]const u8 {
     var parsed_meta = parseInboundMetadata(allocator, msg.metadata_json);
     defer parsed_meta.deinit();
+
     return resolveInboundRouteSessionKeyWithMetadata(allocator, config, msg, parsed_meta.fields);
 }
 
@@ -1287,6 +1289,12 @@ fn processInboundMessage(
 ) void {
     var parsed_meta = parseInboundMetadata(allocator, msg.metadata_json);
     defer parsed_meta.deinit();
+
+    const is_slack = std.mem.eql(u8, msg.channel, "slack");
+    const previous_slack_channel = tools_mod.setThreadSlackChannelId(
+        if (is_slack) parsed_meta.fields.channel_id else null,
+    );
+    defer _ = tools_mod.setThreadSlackChannelId(previous_slack_channel);
 
     var routing_plan = buildInboundRoutingPlan(allocator, runtime.config, msg, parsed_meta.fields);
     defer routing_plan.deinit(allocator);
