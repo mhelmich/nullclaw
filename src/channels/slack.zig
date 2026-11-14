@@ -821,7 +821,10 @@ pub const SlackChannel = struct {
         const auth_header = try std.fmt.allocPrint(self.allocator, "Authorization: Bearer {s}", .{app_token});
         defer self.allocator.free(auth_header);
         const headers = [_][]const u8{auth_header};
-        const resp = root.http_util.curlPost(self.allocator, url, "{}", &headers) catch return error.SlackApiError;
+        const resp = root.http_util.curlPost(self.allocator, url, "{}", &headers) catch |err| {
+            log.warn("Slack Socket Mode apps.connections.open transport failed: {}", .{err});
+            return error.SlackApiError;
+        };
         defer self.allocator.free(resp);
 
         const parsed = std.json.parseFromSlice(std.json.Value, self.allocator, resp, .{}) catch return error.SlackApiError;
@@ -853,7 +856,14 @@ pub const SlackChannel = struct {
         else
             "";
 
-        if (std.mem.eql(u8, msg_type, "disconnect")) return error.ShouldReconnect;
+        if (std.mem.eql(u8, msg_type, "disconnect")) {
+            const reason = if (parsed.value.object.get("reason")) |value|
+                if (value == .string) value.string else "unknown"
+            else
+                "unknown";
+            log.warn("Slack Socket Mode requested reconnect: reason={s}", .{reason});
+            return error.ShouldReconnect;
+        }
 
         if (parsed.value.object.get("envelope_id")) |env_val| {
             if (env_val == .string and env_val.string.len > 0) {
@@ -890,12 +900,16 @@ pub const SlackChannel = struct {
         var host_buf: [std.Io.net.HostName.max_len]u8 = undefined;
         var path_buf: [2048]u8 = undefined;
         const parts = try parseSocketConnectParts(ws_url, &host_buf, &path_buf);
-        const ws_stream = try websocket.WsClient.connectTcp(self.allocator, parts.host, parts.port);
+        const ws_stream = websocket.WsClient.connectTcp(self.allocator, parts.host, parts.port) catch |err| {
+            log.warn("Slack Socket Mode TCP connect failed: {}", .{err});
+            return err;
+        };
         if (!self.publishSocket(ws_stream.handle)) {
             self.closeOwnedSocketStream(ws_stream);
             return error.ConnectionClosed;
         }
         var ws = websocket.WsClient.connectFromStream(self.allocator, ws_stream, parts.host, parts.path, &.{}) catch |err| {
+            log.warn("Slack Socket Mode WebSocket handshake failed: {}", .{err});
             self.closeOwnedSocketStream(ws_stream);
             return err;
         };
@@ -907,10 +921,16 @@ pub const SlackChannel = struct {
 
         while (self.running.load(.acquire)) {
             const maybe_text = ws.readTextMessage() catch |err| switch (err) {
-                error.ConnectionClosed => break,
+                error.ConnectionClosed => {
+                    log.warn("Slack Socket Mode WebSocket closed by peer");
+                    break;
+                },
                 else => return err,
             };
-            const text = maybe_text orelse break;
+            const text = maybe_text orelse {
+                log.warn("Slack Socket Mode WebSocket ended without a close frame");
+                break;
+            };
             defer self.allocator.free(text);
             self.handleSocketPayload(&ws, text) catch |err| {
                 if (err == error.ShouldReconnect) return err;
@@ -924,6 +944,9 @@ pub const SlackChannel = struct {
         while (self.running.load(.acquire)) {
             if (self.runSocketOnce()) |_| {
                 consecutive_socket_failures = 0;
+                if (self.running.load(.acquire)) {
+                    log.warn("Slack Socket Mode connection ended; reconnecting");
+                }
             } else |err| {
                 if (err == error.SlackAuthFailed) {
                     log.err("Slack socket auth failed; stopping Slack channel. Verify bot_token/app_token and scopes.", .{});
