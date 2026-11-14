@@ -142,6 +142,7 @@ pub const process_util = @import("process_util.zig");
 pub const calculator = @import("calculator.zig");
 pub const sqlite_query = @import("sqlite_query.zig");
 pub const anonymize_text = @import("anonymize_text.zig");
+pub const slack_history = @import("slack_history.zig");
 
 // ── Core types ──────────────────────────────────────────────────────
 
@@ -362,6 +363,7 @@ pub fn allTools(
         http_allowed_domains: []const []const u8 = &.{},
         http_max_response_size: u32 = 1_000_000,
         http_timeout_secs: u64 = 30,
+        slack_config: ?config_types.SlackConfig = null,
         web_search_base_url: ?[]const u8 = null,
         web_search_provider: []const u8 = "auto",
         web_search_fallback_providers: []const []const u8 = &.{},
@@ -568,6 +570,14 @@ pub fn allTools(
             .allowed_domains = opts.http_allowed_domains,
         };
         try list.append(allocator, wft.tool());
+    }
+
+    if (opts.slack_config) |slack_cfg| {
+        if (slack_cfg.bot_token.len > 0) {
+            const sht = try allocator.create(slack_history.SlackHistoryTool);
+            sht.* = .{ .bot_token = slack_cfg.bot_token };
+            try list.append(allocator, sht.tool());
+        }
     }
 
     if (opts.browser_enabled) {

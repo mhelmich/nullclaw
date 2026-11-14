@@ -571,6 +571,7 @@ pub fn run(allocator: std.mem.Allocator, args: []const [:0]const u8) !void {
     // Create tools (with agents config for delegate depth enforcement)
     const tools = try tools_mod.allTools(allocator, cfg.workspace_dir, .{
         .http_enabled = cfg.http_request.enabled,
+        .slack_config = cfg.channels.slackPrimary(),
         .http_allowed_domains = cfg.http_request.allowed_domains,
         .http_max_response_size = cfg.http_request.max_response_size,
         .http_timeout_secs = cfg.http_request.timeout_secs,

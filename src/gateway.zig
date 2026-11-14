@@ -2844,6 +2844,7 @@ fn initLocalAgentRuntime(
 
     const tools_slice = tools_mod.allTools(allocator, cfg.workspace_dir, .{
         .http_enabled = cfg.http_request.enabled,
+        .slack_config = cfg.channels.slackPrimary(),
         .http_allowed_domains = cfg.http_request.allowed_domains,
         .http_max_response_size = cfg.http_request.max_response_size,
         .http_timeout_secs = cfg.http_request.timeout_secs,

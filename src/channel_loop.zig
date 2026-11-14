@@ -1340,6 +1340,7 @@ pub const ChannelRuntime = struct {
         // Tools
         const tools = tools_mod.allTools(allocator, config.workspace_dir, .{
             .http_enabled = config.http_request.enabled,
+            .slack_config = config.channels.slackPrimary(),
             .http_allowed_domains = config.http_request.allowed_domains,
             .http_max_response_size = config.http_request.max_response_size,
             .http_timeout_secs = config.http_request.timeout_secs,
